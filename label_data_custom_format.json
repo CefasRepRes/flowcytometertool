@@ -1,0 +1,19 @@
+{
+    "image_fields": {
+        "file location": "",
+        "latitude": "",
+        "longitude": "",
+        "datetime": "",
+        "species": "",
+        "genus": "",
+        "family": "",
+        "order": "",
+        "sex": "",
+        "thing": "",
+        "aphiaID": "",
+        "life stage or biotype": "",
+        "taxonomist": "fixed",
+        "institute": "fixed",
+        "survey": "fixed",
+    }
+}

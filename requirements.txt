@@ -1,0 +1,14 @@
+requests==2.31.0
+Pillow==9.4.0
+statistics
+python=3.10.12
+scikit-learn=1.5.2
+pandas=2.2.0
+numpy=1.26.3
+matplotlib=3.8.3
+seaborn=0.13.2
+plotly=5.24.1
+ijson=3.2.3
+psutil=6.0.0
+azure-core==1.32.0
+azure-storage-blob==12.24.1

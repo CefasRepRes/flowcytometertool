@@ -1,0 +1,9 @@
+# run in anaconda prompt. Don't activate the environment... #lucflowcyto\Scripts\activate
+
+#test
+cd C:\Users\JR13\Documents\LOCAL_NOT_ONEDRIVE\lucinda-flow-cytometry\scripts
+python visualiser.py
+
+# make
+cd C:\Users\JR13\Documents\LOCAL_NOT_ONEDRIVE\lucinda-flow-cytometry\scripts
+pyinstaller visualiser.spec
