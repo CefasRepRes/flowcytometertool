@@ -5,7 +5,7 @@ a = Analysis(
     ['trainer_lucinda_version.py'],
     pathex=[],
     binaries=[],
-    datas=[('README.md', '.')],
+    datas=[('readme.md', '.')],
     hiddenimports=['functions', 'custom_functions_for_python', 'listmode'],
     hookspath=[],
     hooksconfig={},

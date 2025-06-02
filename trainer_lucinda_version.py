@@ -1,4 +1,5 @@
 import requests
+import sys
 import subprocess
 import tkinter as tk
 from tkinter import messagebox
@@ -52,7 +53,14 @@ class UnifiedApp:
 
     def display_readme(self, parent_frame):
         try:
-            with open("README.md", "r", encoding="utf-8") as f:
+            if getattr(sys, 'frozen', False):
+                # Running in a PyInstaller bundle
+                base_path = sys._MEIPASS
+            else:
+                # Running in a normal Python environment
+                base_path = os.path.abspath(".")
+            readme_path = os.path.join(base_path, "README.md")
+            with open(readme_path, "r", encoding="utf-8") as f:
                 readme_content = f.read()
             text_widget = ScrolledText(parent_frame, wrap=tk.WORD)
             text_widget.insert(tk.END, readme_content)
