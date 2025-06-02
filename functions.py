@@ -588,7 +588,7 @@ def train_classifier(df, model_path):
         inner_k=2,
         outer_k=2,
         select_K=5,
-        cores=1,
+        cores=cores,
         lc_k=2,
         n_sizes=2,
         filename_cvResults="cv_results.csv",
