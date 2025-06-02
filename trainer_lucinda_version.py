@@ -20,7 +20,7 @@ from custom_functions_for_python import buildSupervisedClassifier, loadClassifie
 import functions
 from tkinter.scrolledtext import ScrolledText
 from functions import *
-#import multiprocessing
+import sys
 
 class UnifiedApp:
     def __init__(self, root):
