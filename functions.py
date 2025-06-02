@@ -568,10 +568,15 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
         for plot in plot_list:
             plot.show()
 
+
 def train_classifier(df, model_path):
     df["group"] = df.index
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
 
+    # Detect if running from PyInstaller bundle
+    is_frozen = getattr(sys, 'frozen', False)
+    cores = 1 if is_frozen else os.cpu_count()
+    
     # Split the data
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, stratify=cleaned_df["source_label"], random_state=42)
 
@@ -583,7 +588,7 @@ def train_classifier(df, model_path):
         inner_k=2,
         outer_k=2,
         select_K=5,
-        cores=8,
+        cores=1,
         lc_k=2,
         n_sizes=2,
         filename_cvResults="cv_results.csv",
