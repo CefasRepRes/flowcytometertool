@@ -9,6 +9,16 @@ Acknowledgements to:
 Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
 Tools are dependent on a release of cyz2json https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5
 
+## Compilation
+
+This was developed in miniforge3 prompt. You can download this to your machine and compile the program with the command "pyinstaller trainer_lucinda_version.spec"
+
+## Github actions
+
+For reproducibility and to test whether this is likely to run on another machine we use github actions on an ubuntu runner, in git bash terminal you can trigger a test build on github with a new VERSION, e.g:
+VERSION="0.1.2"; git tag -a v$VERSION -m "Release version $VERSION"; git push origin v$VERSION
+
+
 ---
 
 ## Tabs Overview 

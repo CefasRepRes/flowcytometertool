@@ -1,4 +1,4 @@
-name: flowcytometertools
+name: flowcytometertool
 channels:
   - conda-forge
 dependencies:
@@ -30,4 +30,4 @@ dependencies:
       - azure-core==1.32.0
       - azure-storage-blob==12.24.1
       - watchdog==6.0.0
-prefix: /home/runner/miniforge3/envs/flowcytometertools
+prefix: /home/runner/miniforge3/envs/flowcytometertool
