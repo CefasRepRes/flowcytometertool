@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - name: Checkout code
@@ -17,7 +17,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v2
       with:
         auto-update-conda: true
-        python-version: 3.10
+        python-version: 3.10.12
         environment-file: environment_modified.yml # modified for pyinstaller
         activate-environment: flowcytometertoolmod
         auto-activate-base: false
