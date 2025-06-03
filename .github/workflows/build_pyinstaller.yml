@@ -25,8 +25,7 @@ jobs:
         pip install pyinstaller
 
     - name: Build executable with PyInstaller
-      run: |
-        pyinstaller trainer_lucinda_version.spec
+      run: pyinstaller trainer_lucinda_version.spec
 
     - name: Upload executable
       uses: actions/upload-artifact@v4
