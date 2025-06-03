@@ -13,19 +13,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v2
       with:
-        python-version: '3.10'
+        auto-update-conda: true
+        python-version: 3.10
+        environment-file: environment.yml
+        activate-environment: flowcytometertool
+        auto-activate-base: false
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+    - name: Install PyInstaller
+      shell: bash -l {0}
+      run: conda install -c conda-forge pyinstaller
 
     - name: Build executable with PyInstaller
-      run: pyinstaller --clean --log-level=DEBUG trainer_lucinda_version.spec
+      shell: bash -l {0}
+      run: pyinstaller --debug=imports trainer_lucinda_version.spec
 
     - name: Upload executable
       uses: actions/upload-artifact@v4
