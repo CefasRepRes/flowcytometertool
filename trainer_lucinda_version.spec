@@ -2,8 +2,20 @@
 import os
 import tkinter
 
-tk_lib = os.path.join(os.path.dirname(tkinter.__file__), 'tcl')
-tk_dll = os.path.join(os.path.dirname(tkinter.__file__), 'tk')
+tkinter_root = os.path.dirname(tkinter.__file__)
+tcl_dir = os.path.join(tkinter_root, 'tcl')
+tk_dir = os.path.join(tkinter_root, 'tk')
+
+datas = [
+    ('readme.md', '.'),
+]
+
+# Only add Tcl/Tk if they exist (safe for CI)
+if os.path.exists(tcl_dir):
+    datas.append((tcl_dir, 'tcl'))
+if os.path.exists(tk_dir):
+    datas.append((tk_dir, 'tk'))
+
 
 a = Analysis(
     ['trainer_lucinda_version.py'],
