@@ -31,4 +31,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: trainer_lucinda_version
-        path: dist/trainer_lucinda_version/**
+        path: dist/**
