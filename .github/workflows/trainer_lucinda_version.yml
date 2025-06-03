@@ -58,7 +58,7 @@ jobs:
     - name: Run backend logic without GUI
       run: |
         source $HOME/miniconda/etc/profile.d/conda.sh
-        conda activate flowcytometertool
+        conda activate /usr/share/miniconda/envs/flowcytometertools
         python trainer_lucinda_version.py --nogui
 
     - name: Create release
