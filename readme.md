@@ -1,13 +1,22 @@
 # Python Tools for CYZ File Processing
 
-There are a few python tools here in various states. This repository resembles an attempt to put them in one place.
+There are a few python tools here in various states. This repository resembles an attempt to put them in one place, anticipating that we will be using a random forest model to classify our data.
 It is developed around a handful of labelled flow cytometer files held in https://citprodflowcytosa.blob.core.windows.net/public/exampledata/ but you could export your own data from cytoclus software and put them in flowcytometertools/exampledata/. To do this in cytoclus, first select your file, with sets defined, under "Database" click Exports and check the box for CYZ file (for set)
 This was developed on windows but a github actions workflow tests whether the `Download & Train` tab will work on a linux machine.
-The software should be considered "nightly", ideally any users should be familiar with python because in all likelihood something will break. 
+Ideally any users should be familiar with python because in all likelihood something will break. 
 
 Acknowledgements to:
 Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
-Tools are dependent on a release of cyz2json https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5
+Sebastien Galvagno, Eric Payne and Rob Blackwell for their parts played in cyz2json (flowcytometertool uses https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5)
+OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
+
+
+## Download
+
+Check releases to download a "distributable", unzip this, open software via the distributable\trainer_lucinda_version\trainer_lucinda_version.exe
+Whilst tested on linux, I have only made pyinstaller builds of the software for windows.
+https://github.com/CefasRepRes/flowcytometertool/releases
+
 
 ## Compilation
 
@@ -15,8 +24,8 @@ This was developed in miniforge3 prompt. You can download this to your machine a
 
 ## Github actions
 
-For reproducibility and to test whether this is likely to run on another machine we use github actions on an ubuntu runner, in git bash terminal you can trigger a test build on github with a new VERSION, e.g:
-VERSION="0.1.2"; git tag -a v$VERSION -m "Release version $VERSION"; git push origin v$VERSION
+For reproducibility and to test whether this can to run on another machine we use github actions on an ubuntu runner, in git bash terminal you can trigger a test build on github with a new VERSION, e.g:
+VERSION="0.0.0.1"; git tag -a v$VERSION -m "Release version $VERSION"; git push origin v$VERSION
 
 
 ---
@@ -24,9 +33,9 @@ VERSION="0.1.2"; git tag -a v$VERSION -m "Release version $VERSION"; git push or
 ## Tabs Overview 
 
 ### 1: `Download & Train`
-- Takes functions developed under Lucinda Lanoy's Masters research inside a tkinter GUI wrapper instead of the R markdown wrapper Lucinda used.
+- Takes functions developed under Lucinda Lanoy's Masters research inside a tkinter GUI wrapper instead of the R markdown wrapper Lucinda used. It is a stripped back version.
 - Trains models including random forest using `sklearn`.
-- At the time of writing, this is the only script tested using GitHub Actions.
+- At the time of writing, this is the only part tested using GitHub Actions.
 - Tested on a Linux runner, but also runs locally on Windows.
 - *issue* Ihave not tested building a release for a while
 
