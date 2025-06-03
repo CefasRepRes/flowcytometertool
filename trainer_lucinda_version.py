@@ -28,8 +28,7 @@ class UnifiedApp:
         self.root.title("Flow Cytometry Tools")
         self.root.geometry("1200x800")
         self.temp_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
-        self.download_path = os.path.join("exampledata/")
-        self.output_path = os.path.join("extraction/")
+        self.download_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/downloadeddata/')
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.temp_dir, "cyz2json")
         model_dir = os.path.join(self.temp_dir, "models")
@@ -170,7 +169,8 @@ class UnifiedApp:
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
         self.url_entry = tk.Entry(self.tab_download, width=80)
-        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
+        #self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
+        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/labelledmultipleexperts3seas/external/") # This dataset depends on an SAS token having been passed in on the blob tools tab.
         self.url_entry.pack(pady=5)
         tk.Button(self.tab_download, text="Download Files", command=self.download_blob_directory).pack(pady=5)
         tk.Button(self.tab_download, text="Download cyz2json", command=self.install_all_requirements).pack(pady=5)
@@ -266,8 +266,13 @@ class UnifiedApp:
 
     def download_blob_directory(self):
         try:
+            sas_token_path = self.sas_token_entry.get().strip()
+            sas_token = get_sas_token(sas_token_path)
             blob_url = self.url_entry.get()
-            download_blobs(blob_url, self.download_path)
+            if blob_url == "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/":
+                download_blobs(blob_url, self.download_path) # Pass no authentication for this folder, it is public data and actually by passing the key for another folder you get an error for this public folder
+            else:                
+                download_blobs(blob_url, self.download_path,sas_token)
             messagebox.showinfo("Success", "Files downloaded successfully.")
         except Exception as e:
             messagebox.showerror("Download Error", f"Failed to download files: {e}")
@@ -396,7 +401,8 @@ class UnifiedApp:
         output_blob_folder = self.output_blob_folder.get().strip()
         print(container)
         container_url = self.url_entry_blob.get().strip()
-        sas_token = get_sas_token('C:/Users/JR13/Documents/authenticationkeys/flowcytosaSAS.txt')
+        sas_token_path = self.sas_token_entry.get().strip()
+        sas_token = get_sas_token(sas_token_path)
         blob_files = list_blobs(container_url, sas_token)
         processed_files = set()
         log_file_path = "process_log.txt"

@@ -631,14 +631,15 @@ def test_model(df, model_path):
 
 
 
-def download_blobs(blob_url, download_path):
+def download_blobs(blob_url, download_path, sas_token = None):
     parsed_url = urlparse(blob_url)
     account_url = f"https://{parsed_url.netloc}"
     container_name = parsed_url.path.strip("/").split("/")[0]
     prefix = "/".join(parsed_url.path.strip("/").split("/")[1:])
-    container_client = ContainerClient(account_url=account_url, container_name=container_name, credential=None)
+    container_client = ContainerClient(account_url=account_url, container_name=container_name, credential=sas_token)
     blobs = container_client.list_blobs(name_starts_with=prefix)
     for blob in blobs:
+        print(blob.name)
         blob_path = blob.name
         local_file_path = os.path.join(download_path, os.path.relpath(blob_path, prefix))
         os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
