@@ -28,7 +28,7 @@ jobs:
 
     - name: Build executable with PyInstaller
       shell: bash -l {0}
-      run: pyinstaller --debug=imports trainer_lucinda_version.spec
+      run: pyinstaller trainer_lucinda_version.spec
 
     - name: Upload executable
       uses: actions/upload-artifact@v4
