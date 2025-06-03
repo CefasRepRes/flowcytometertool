@@ -38,7 +38,6 @@ jobs:
 
   run-linux-backend:
     runs-on: ubuntu-24.04
-    needs: build-windows-exe  # ensures Windows build finishes first, better I think because this job is 2 hours long
 
     steps:
     - name: Checkout repository
@@ -50,10 +49,11 @@ jobs:
         bash miniconda.sh -b -p $HOME/miniconda
         export PATH="$HOME/miniconda/bin:$PATH"
         conda init bash
-        source $HOME/.bashrc
+        source $HOME/.bashrc  # Ensure the shell is reloaded
 
     - name: Create Conda environment
-      run: conda env create -f environment.yml
+      run: |
+        conda env create -f environment.yml
 
     - name: Run backend logic without GUI
       run: |
