@@ -29,6 +29,7 @@ class UnifiedApp:
         self.root.geometry("1200x800")
         self.temp_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
         self.download_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/downloadeddata/')
+        self.output_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/extraction/')
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.temp_dir, "cyz2json")
         model_dir = os.path.join(self.temp_dir, "models")
