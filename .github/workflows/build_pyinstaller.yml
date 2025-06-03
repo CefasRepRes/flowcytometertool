@@ -25,10 +25,10 @@ jobs:
         pip install pyinstaller
 
     - name: Build executable with PyInstaller
-      run: pyinstaller trainer_lucinda_version.spec
+      run: pyinstaller --clean --log-level=DEBUG trainer_lucinda_version.spec
 
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
-        name: trainer_lucinda_version
+        name: distributable
         path: dist/**
