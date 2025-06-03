@@ -18,8 +18,8 @@ jobs:
       with:
         auto-update-conda: true
         python-version: 3.10.12
-        environment-file: environment_modified.yml # modified for pyinstaller
-        activate-environment: flowcytometertoolmod
+        environment-file: environment.yml
+        activate-environment: flowcytometertool
         auto-activate-base: false
 
     - name: Install PyInstaller
