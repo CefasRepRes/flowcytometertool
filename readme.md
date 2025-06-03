@@ -13,10 +13,8 @@ OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
 
 ## Download
 
-Check releases to download a "distributable", unzip this, open software via the distributable\trainer_lucinda_version\trainer_lucinda_version.exe
+Check [releases](https://github.com/CefasRepRes/flowcytometertool/releases) to download a "distributable". Unzip this, then open the software via:
 Whilst tested on linux, I have only made pyinstaller builds of the software for windows.
-https://github.com/CefasRepRes/flowcytometertool/releases
-
 
 ## Compilation
 
