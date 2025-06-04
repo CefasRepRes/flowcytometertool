@@ -105,46 +105,48 @@ def test_classifier(df, model_path, nogui=False):
         return df, None
 
 def combine_csvs(output_path, nogui=False):
-
-#    # Zone "FAKEBALTIC" dummy dataset
-#    expertise_levels = {
-#        'expert': ['Veronique'],
-#        'advanced': ['Alice'],
-#        'non_expert': ['Joe']
-#    }
-    
-    # Zone "MED"
-    expertise_levels = {
-        'expert': ['EXP1'],
-        'advanced': ['EXP2'],
-        'non_expert': ['EXP3','EXP4','EXP5']
-    }    
-    
-#    # Zone "BALTIC"
-#    expertise_levels = {
-#        'expert': ['EXP3'],
-#        'advanced': [],
-#        'non_expert': ['EXP1','EXP2','EXP4','EXP5']
-#    }    
-
-#    # Zone "CHANNEL"
-#    expertise_levels = {
-#        'expert': ['EXP4'],
-#        'advanced': [],
-#        'non_expert': ['EXP1','EXP2','EXP3','EXP5']
-#    }    
-    
-#    # Zone "PELTIC"
-#    expertise_levels = {
-#        'expert': ['EXP5'],
-#        'advanced': [],
-#        'non_expert': ['EXP1','EXP2','EXP3','EXP4']
-#    }    
+   
     
     if nogui:
         zonechoices = "PELTIC" # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
         zonechoices = choose_zone_folders(output_path)
+        
+    if zonechoices == "FAKEBALTIC":# dummy dataset
+        expertise_levels = {
+            'expert': ['Veronique'],
+            'advanced': ['Alice'],
+            'non_expert': ['Joe']
+        }
+    
+    if zonechoices == "MED":
+        expertise_levels = {
+            'expert': ['EXP1'],
+            'advanced': ['EXP2'],
+            'non_expert': ['EXP3','EXP4','EXP5']
+        }    
+    
+    if zonechoices == "BALTIC":
+        expertise_levels = {
+            'expert': ['EXP3'],
+            'advanced': [],
+            'non_expert': ['EXP1','EXP2','EXP4','EXP5']
+        }    
+
+    if zonechoices == "CHANNEL":
+        expertise_levels = {
+            'expert': ['EXP4'],
+            'advanced': [],
+            'non_expert': ['EXP1','EXP2','EXP3','EXP5']
+        }    
+    
+    if zonechoices == "PELTIC":
+        expertise_levels = {
+            'expert': ['EXP5'],
+            'advanced': [],
+            'non_expert': ['EXP1','EXP2','EXP3','EXP4']
+        }
+        
     try:
         print("Zone choices:", zonechoices)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
