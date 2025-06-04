@@ -189,8 +189,7 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        combined_df = combine_csvs(self.output_path, "expertise_matrix.csv", nogui=False)
-        # Further processing with combined_df if needed
+        self.df = combine_csvs(self.output_path, "expertise_matrix.csv", nogui=False)
 
 
     def build_expertise_matrix_editor(self, parent_frame):
