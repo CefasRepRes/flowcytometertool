@@ -20,12 +20,7 @@ This python code is being developed with marine research in mind, where understa
 There are a few python tools here in various states. This repository resembles an attempt to put them in one place, anticipating that we will be using a random forest model to classify the flow cytometer data being generated on the RV cefas endeavour.
 It is developed around a handful of labelled flow cytometer files held in https://citprodflowcytosa.blob.core.windows.net/public/exampledata/ but you could export your own data from cytoclus software and put them in flowcytometertools/exampledata/. To do this in cytoclus, first select your file, with sets defined, under "Database" click Exports and check the box for CYZ file (for set)
 This was developed on windows but a github actions workflow tests whether the `Download & Train` tab will work on a linux machine.
-Ideally any users should be familiar with python because in all likelihood something will break. 
-
-Acknowledgements to:
-Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
-Sebastien Galvagno, Eric Payne and Rob Blackwell for their parts played in cyz2json (flowcytometertool uses https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5)
-OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
+Ideally any users should be familiar with python because in all likelihood something will break.
 
 
 ## Download
@@ -108,3 +103,18 @@ This utility monitors a local directory for new `.CYZ` files and automatically p
 - Outputs results to a specified destination directory.
 - *Known issues:*
   - Not recently tested.
+
+
+## Acknowledgements to
+Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
+
+Sebastien Galvagno, Eric Payne and Rob Blackwell for their parts played in cyz2json (flowcytometertool uses https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5)
+
+OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
+
+•	Lotty = EXP1, "expert" level on Mediterranean data, considered "non expert" for the other zones,
+•	Clementine = EXP2, "advanced" level on Mediterranean data, considered "non expert" for the other zones, 
+•	Lumi = EXP3, "expert" level on Baltic data, considered "non expert" for the other zones, 
+•	Zeline = EXP4, "expert" level on English Channel data, considered "non expert" for the other zones, 
+•	Veronique = EXP5, "expert" level on Celtic data, considered "non expert" for the other zones.
+•	Joe = EXP6, "non expert" for all zones.
