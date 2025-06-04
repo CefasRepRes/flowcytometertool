@@ -26,7 +26,7 @@ class UnifiedApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Flow Cytometry Tools")
-        self.root.geometry("1200x800")
+        self.root.geometry("1800x1000")
         self.tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
         self.download_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
         self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'extraction/')
@@ -135,7 +135,8 @@ class UnifiedApp:
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
 
     def create_widgets(self):
-        tk.Label(self.root, text=f"Temporary Working Directory: {self.tool_dir}", fg="gray").pack(pady=(10, 0))
+        self.redirect_stdout_to_gui()
+        tk.Label(self.root, text=f"Working Directory: {self.tool_dir}", fg="gray").pack(pady=(10, 0))
         notebook = ttk.Notebook(self.root)
         notebook.pack(expand=True, fill='both')
         self.tab_readme = ttk.Frame(notebook)
@@ -150,7 +151,29 @@ class UnifiedApp:
         self.build_blob_tools_tab()
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
-        self.build_local_watcher_tab()   
+        self.build_local_watcher_tab()
+
+    def redirect_stdout_to_gui(self):
+        self.log_output = ScrolledText(self.root, height=10, state='disabled')
+        self.log_output.pack(fill='both', padx=10, pady=5)
+
+        class StdoutRedirector:
+            def __init__(inner_self, widget):
+                inner_self.widget = widget
+
+            def write(inner_self, message):
+                inner_self.widget.configure(state='normal')
+                inner_self.widget.insert('end', message)
+                inner_self.widget.configure(state='disabled')
+                inner_self.widget.see('end')
+
+            def flush(inner_self):
+                pass
+
+        sys.stdout = StdoutRedirector(self.log_output)
+        sys.stderr = StdoutRedirector(self.log_output)
+
+        
         
 
     def generate_mixfile(self):
@@ -172,7 +195,7 @@ class UnifiedApp:
 
     def build_expertise_matrix_editor(self, parent_frame):
         # Label
-        tk.Label(parent_frame, text="Edit Expertise Matrix:").pack(pady=(20, 5))
+        tk.Label(parent_frame, text="Edit expertise levels assigned to your dataset (optional):").pack(pady=(20, 5))
 
         # Treeview Frame
         tree_frame = tk.Frame(parent_frame)
