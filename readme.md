@@ -49,10 +49,16 @@ VERSION="0.0.0.1"; git tag -a v$VERSION -m "Release version $VERSION"; git push 
 ## Tabs Overview
 
 ### 1: `Download & Train`
-This tab wraps the model training functions developed during Lucinda Lanoy’s Masters research in a simplified `tkinter` GUI (replacing the original R Markdown interface). It allows users to:
-
-- Train machine learning models, including Random Forests, using `scikit-learn`.
-- Run the training process on both Windows and Linux (tested via GitHub Actions on a Linux runner).
+This tab wraps the model training functions developed during Lucinda Lanoy’s Masters research in a simplified `tkinter` GUI (replacing the original R Markdown interface). It allows users to train machine learning models, including Random Forests, using `scikit-learn`.
+Click on the buttons in sequence from top-to-bottom, these will:
+1) Download the data from a blob store. By default this should be set to the public data in https://citprodflowcytosa.blob.core.windows.net/public/exampledata/ which needs no SAS authentication. If you change it to a blob store that needs authenticating, put a path to your SAS key saved as a plain .txt file in the "blob tools" tab.
+2) Downloads the cyz2json executable you need
+3) Applies the cyz2json to the downloaded data. Your CYZ files should now be json files instead (this step is invoked by subprocess and no check is implemented to ensure it has worked).
+4) Converts your json files to listmode csvs. "Listmode" is the part of the json file which pertains to the laser summaries. This step therefore leaves behind any images taken and the full pulse shape is not taken out of the json files either.
+5) Combine CSVs, specifying the Zone you want to train for. Training across multiple zones is not yet implemented. Note the expertise matrix which assigns a level of expertise (1 being non-expert, 2 being intermediate, 3 being expert). If there is a disagreement on a label, the expert will be prioritised.
+6) Train model. A split of your data will be taken for training, some will be retained for testing. This trains a LOT of models in sklearn, searching for the best model variables in your data and best hyperparameters.
+7) Test classifier against the test dataset.
+- You can run the training process on both Windows and Linux (tested via GitHub Actions on a Linux runner).
 - *Note:* Building a release hasn’t been tested recently.
 
 ---

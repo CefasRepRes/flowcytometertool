@@ -662,6 +662,7 @@ def convert_cyz_to_json(input_dir, output_dir, dll_path):
     for root, _, files in os.walk(input_dir):
         for file in files:
             if file.lower().endswith(".cyz"):
+                print(file)
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, input_dir)
                 rel_dir = os.path.dirname(rel_path)

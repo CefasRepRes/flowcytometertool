@@ -252,8 +252,8 @@ class UnifiedApp:
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
         self.url_entry = tk.Entry(self.tab_download, width=80)
-        #self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
-        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/labelledmultipleexperts3seas/external/") # This dataset depends on an SAS token having been passed in on the blob tools tab.
+        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
+        #self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/labelledmultipleexperts3seas/external/") # This dataset depends on an SAS token having been passed in on the blob tools tab.
         self.url_entry.pack(pady=5)
         tk.Button(self.tab_download, text="Download Files", command=self.download_blob_directory).pack(pady=5)
         tk.Button(self.tab_download, text="Download cyz2json", command=self.install_all_requirements).pack(pady=5)
