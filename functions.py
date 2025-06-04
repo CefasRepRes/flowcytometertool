@@ -942,7 +942,7 @@ def run_backend_only():
 
         # 5. Combine CSVs
         print("📊 Combining CSV files...")
-        df = combine_csvs(output_path, nogui=True)
+        df = combine_csvs(output_path, "expertise_matrix.csv", nogui=True)
         if df is None:
             print("⚠️ No CSV files found.")
             return
