@@ -151,7 +151,6 @@ class UnifiedApp:
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
         self.build_local_watcher_tab()   
-        self.build_expertise_matrix_editor()
         
 
     def generate_mixfile(self):
@@ -171,13 +170,20 @@ class UnifiedApp:
         # Further processing with combined_df if needed
 
 
+    def build_expertise_matrix_editor(self, parent_frame):
+        # Label
+        tk.Label(parent_frame, text="Edit Expertise Matrix:").pack(pady=(20, 5))
 
-    def build_expertise_matrix_editor(self):
-        self.tab_expertise = ttk.Frame(self.root)
-        self.root.nametowidget(".!notebook").add(self.tab_expertise, text="Edit Expertise Matrix")
+        # Treeview Frame
+        tree_frame = tk.Frame(parent_frame)
+        tree_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
-        self.tree = ttk.Treeview(self.tab_expertise, show="headings")
-        self.tree.pack(expand=True, fill="both", padx=10, pady=10)
+        self.tree = ttk.Treeview(tree_frame, show="headings")
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.configure(yscrollcommand=scrollbar.set)
 
         try:
             df = pd.read_csv("expertise_matrix.csv")
@@ -196,8 +202,9 @@ class UnifiedApp:
 
         self.tree.bind("<Double-1>", self.on_double_click)
 
-        save_btn = tk.Button(self.tab_expertise, text="Save Changes", command=self.save_expertise_matrix)
+        save_btn = tk.Button(parent_frame, text="Save Expertise Matrix", command=self.save_expertise_matrix)
         save_btn.pack(pady=10)
+
 
     def on_double_click(self, event):
         region = self.tree.identify("region", event.x, event.y)
@@ -255,6 +262,7 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
         tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.model_path, nogui=False)).pack(pady=5)
         tk.Button(self.tab_download, text="Test Classifier", command=lambda: test_classifier(self.df, self.model_path, nogui=False)).pack(pady=5)
+        self.build_expertise_matrix_editor(self.tab_download)
 
     def build_visualization_tab(self):
         self.x_variable_combobox = ttk.Combobox(self.tab_visualize)
