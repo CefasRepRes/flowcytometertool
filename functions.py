@@ -330,11 +330,11 @@ def list_blobs(container_url, sas_token):
         log_message(f"Blob Listing Error: Failed to list blobs: {e}")
         return []
 
-def download_file(url, temp_dir, filename):
+def download_file(url, tool_dir, filename):
     try:
         response = requests.get(url, allow_redirects=True)
         response.raise_for_status()
-        downloaded_file = os.path.join(temp_dir, filename)
+        downloaded_file = os.path.join(tool_dir, filename)
         with open(downloaded_file, 'wb') as file:
             file.write(response.content)
         return downloaded_file
@@ -729,10 +729,10 @@ def dict_to_csv(data, output_file):
     print(f"Data saved to {output_file}")
 
 
-def clear_temp_folder(temp_dir):
+def clear_temp_folder(tool_dir):
     """Clear the temporary directory."""
-    for filename in os.listdir(temp_dir):
-        file_path = os.path.join(temp_dir, filename)
+    for filename in os.listdir(tool_dir):
+        file_path = os.path.join(tool_dir, filename)
         try:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
@@ -912,11 +912,11 @@ def run_backend_only():
     print("🔧 Running in no-GUI mode...")
 
     # Setup paths
-    temp_dir = os.path.expanduser("~/Documents/flowcytometertool/")
+    tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
     download_path = os.path.join("exampledata/")
     output_path = os.path.join("extraction/")
-    cyz2json_dir = os.path.join(temp_dir, "cyz2json")
-    model_dir = os.path.join(temp_dir, "models")
+    cyz2json_dir = os.path.join(tool_dir, "cyz2json")
+    model_dir = os.path.join(tool_dir, "models")
     model_path = os.path.join(model_dir, "final_model.pkl")
 
     os.makedirs(download_path, exist_ok=True)
