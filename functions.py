@@ -912,7 +912,7 @@ def run_backend_only():
     print("🔧 Running in no-GUI mode...")
 
     # Setup paths
-    temp_dir = os.path.join(os.getenv('APPDATA', '/tmp'), 'blobfileloader')
+    temp_dir = os.path.expanduser("~/Documents/flowcytometertool/")
     download_path = os.path.join("exampledata/")
     output_path = os.path.join("extraction/")
     cyz2json_dir = os.path.join(temp_dir, "cyz2json")

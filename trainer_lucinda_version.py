@@ -27,12 +27,12 @@ class UnifiedApp:
         self.root = root
         self.root.title("Flow Cytometry Tools")
         self.root.geometry("1200x800")
-        self.temp_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
-        self.download_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/downloadeddata/')
-        self.output_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/extraction/')
+        self.tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
+        self.download_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
+        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'extraction/')
         os.makedirs(self.download_path, exist_ok=True)
-        self.cyz2json_dir = os.path.join(self.temp_dir, "cyz2json")
-        model_dir = os.path.join(self.temp_dir, "models")
+        self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
+        model_dir = os.path.join(self.tool_dir, "models")
         os.makedirs(model_dir, exist_ok=True)
         self.model_path = os.path.join(model_dir, "final_model.pkl")
         self.df = None
@@ -43,14 +43,13 @@ class UnifiedApp:
         self.current_polygon = None
         self.current_predictions_data = None
         self.dest_path = None
-        self.install_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
         self.create_widgets()
         self.path_entry = tk.Entry(self.tab_download, width=100)
         self.path_entry.insert(0, self.cyz2json_dir + "\\Cyz2Json.dll")
-        self.cyz_file = os.path.join(self.temp_dir, "tempfile.cyz")
-        self.json_file = os.path.join(self.temp_dir, "tempfile.json")
-        self.listmode_file = os.path.join(self.temp_dir, "tempfile.csv")
-        self.model_path = os.path.join(self.temp_dir, "models/final_model.pkl")
+        self.cyz_file = os.path.join(self.tool_dir, "tempfile.cyz")
+        self.json_file = os.path.join(self.tool_dir, "tempfile.json")
+        self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
+        self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
 
     def display_readme(self, parent_frame):
         try:
@@ -123,9 +122,9 @@ class UnifiedApp:
 
     def install_all_requirements(self):
         self.root.update()
-        if not os.path.exists(self.install_dir):
-            os.makedirs(self.install_dir)
-        self.cyz2json_dir = os.path.join(self.install_dir, "cyz2json")
+        if not os.path.exists(self.tool_dir):
+            os.makedirs(self.tool_dir)
+        self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         self.path_entry.delete(0, tk.END)
         self.path_entry.insert(0, os.path.join(self.cyz2json_dir, "bin", "Cyz2Json.dll"))
         try:
@@ -136,6 +135,7 @@ class UnifiedApp:
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
 
     def create_widgets(self):
+        tk.Label(self.root, text=f"Temporary Working Directory: {self.tool_dir}", fg="gray").pack(pady=(10, 0))
         notebook = ttk.Notebook(self.root)
         notebook.pack(expand=True, fill='both')
         self.tab_readme = ttk.Frame(notebook)
@@ -498,8 +498,8 @@ class UnifiedApp:
                         processed_files.add(processed_url)
         blob_files = [blob_file for blob_file in blob_files if f"{container_url}/{blob_file}" not in processed_files]
         for blob_file in blob_files:
-            instrument_file = os.path.join(self.temp_dir, f"{os.path.basename(blob_file)}_instrument.csv")
-            predictions_file = os.path.join(self.temp_dir, f"{os.path.basename(blob_file)}_predictions.csv")
+            instrument_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_instrument.csv")
+            predictions_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_predictions.csv")
             prediction_counts_path = predictions_file + "_counts.csv"
             plot3d_prediction_path = predictions_file + "_3d.html"
             url = f"{container_url}/{blob_file}{sas_token}"
@@ -510,7 +510,7 @@ class UnifiedApp:
                 except Exception as e:
                     log_message(f"No file to delete: {e} (this is fine)")
             try:
-                downloaded_file = download_file(url, self.temp_dir, self.cyz_file)
+                downloaded_file = download_file(url, self.tool_dir, self.cyz_file)
                 log_message(f"Success: Blob downloaded for {url_notoken}")
                 load_file(self.path_entry.get(), downloaded_file, self.json_file)
                 log_message(f"Success: Cyz2json applied {url_notoken}")
