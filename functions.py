@@ -105,11 +105,42 @@ def test_classifier(df, model_path, nogui=False):
         return df, None
 
 def combine_csvs(output_path, nogui=False):
+
+#    # Zone "FAKEBALTIC" dummy dataset
+#    expertise_levels = {
+#        'expert': ['Veronique'],
+#        'advanced': ['Alice'],
+#        'non_expert': ['Joe']
+#    }
+    
+    # Zone "MED"
     expertise_levels = {
-        'expert': ['Veronique'],
-        'advanced': ['Alice'],
-        'non_expert': ['Joe']
-    }
+        'expert': ['EXP1'],
+        'advanced': ['EXP2'],
+        'non_expert': ['EXP3','EXP4','EXP5']
+    }    
+    
+#    # Zone "BALTIC"
+#    expertise_levels = {
+#        'expert': ['EXP3'],
+#        'advanced': [],
+#        'non_expert': ['EXP1','EXP2','EXP4','EXP5']
+#    }    
+
+#    # Zone "CHANNEL"
+#    expertise_levels = {
+#        'expert': ['EXP4'],
+#        'advanced': [],
+#        'non_expert': ['EXP1','EXP2','EXP3','EXP5']
+#    }    
+    
+#    # Zone "PELTIC"
+#    expertise_levels = {
+#        'expert': ['EXP5'],
+#        'advanced': [],
+#        'non_expert': ['EXP1','EXP2','EXP3','EXP4']
+#    }    
+    
     if nogui:
         zonechoices = "PELTIC" # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -392,18 +423,22 @@ def convert_json_to_listmode(output_path):
             if file.lower().endswith(".json") and not file.endswith("instrument.csv"):
                 json_file = os.path.join(root, file)
                 listmode_file = os.path.splitext(json_file)[0] + ".csv"
-                with open(json_file, encoding="utf-8-sig") as f:
-                    data = json.load(f)
-                lines = extract(
-                    particles=data["particles"],
-                    dateandtime=data["instrument"]["measurementResults"]["start"],
-                    images='',
-                    save_images_to=''
-                )
-                df = pd.DataFrame(lines)
-                df.to_csv(listmode_file, index=False)
-                dict_to_csv(data['instrument'], listmode_file + 'instrument.csv')
-                print(f"Converted: {json_file} → {listmode_file}")
+                try:
+                    with open(json_file, encoding="utf-8-sig") as f:
+                        data = json.load(f)
+                    lines = extract(
+                        particles=data["particles"],
+                        dateandtime=data["instrument"]["measurementResults"]["start"],
+                        images='',
+                        save_images_to=''
+                    )
+                    df = pd.DataFrame(lines)
+                    df.to_csv(listmode_file, index=False)
+                    dict_to_csv(data['instrument'], listmode_file + 'instrument.csv')
+                    print(f"Converted: {json_file} → {listmode_file}")
+                except Exception as e:
+                    print(f"Error processing file: {json_file}")
+                    print(f"Exception: {e}")
 
 def combine_csv_files(output_path):
     variation_pattern = re.compile(r'_(\w+)\.cyz\.csv$')
@@ -711,7 +746,7 @@ def dict_to_csv(data, output_file):
     for item in flattened_data:
         header.update(item.keys())
     header = sorted(header)
-    with open(output_file, 'w', newline='') as file:
+    with open(output_file, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
         for item in flattened_data:
