@@ -104,50 +104,21 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, nogui=False):
-   
-    
+def combine_csvs(output_path, expertise_matrix_path, nogui=False):
     if nogui:
-        zonechoices = "PELTIC" # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
+        zonechoices = "PELTIC"  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
         zonechoices = choose_zone_folders(output_path)
-        
-    if zonechoices == "FAKEBALTIC":# dummy dataset
-        expertise_levels = {
-            'expert': ['Veronique'],
-            'advanced': ['Alice'],
-            'non_expert': ['Joe']
-        }
-    
-    if zonechoices == "MED":
-        expertise_levels = {
-            'expert': ['EXP1'],
-            'advanced': ['EXP2'],
-            'non_expert': ['EXP3','EXP4','EXP5']
-        }    
-    
-    if zonechoices == "BALTIC":
-        expertise_levels = {
-            'expert': ['EXP3'],
-            'advanced': [],
-            'non_expert': ['EXP1','EXP2','EXP4','EXP5']
-        }    
 
-    if zonechoices == "CHANNEL":
-        expertise_levels = {
-            'expert': ['EXP4'],
-            'advanced': [],
-            'non_expert': ['EXP1','EXP2','EXP3','EXP5']
-        }    
-    
-    if zonechoices == "PELTIC":
-        expertise_levels = {
-            'expert': ['EXP5'],
-            'advanced': [],
-            'non_expert': ['EXP1','EXP2','EXP3','EXP4']
-        }
-        
     try:
+        expertise_matrix = pd.read_csv(expertise_matrix_path, index_col=0)
+        expertise_levels = expertise_matrix.loc[zonechoices].to_dict()
+        expertise_levels = {
+            'expert': [k for k, v in expertise_levels.items() if v == 3],
+            'advanced': [k for k, v in expertise_levels.items() if v == 2],
+            'non_expert': [k for k, v in expertise_levels.items() if v == 1]
+        }
+
         print("Zone choices:", zonechoices)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
         print("Unique weights:", list(set(combined_df['weight'])))
@@ -181,6 +152,7 @@ def combine_csvs(output_path, nogui=False):
         else:
             messagebox.showerror("Combine Error", f"Failed to combine CSVs: {e}")
         return None
+
 
 def sample_rows(df, sample_rate=0.001):
     return df.sample(frac=sample_rate)

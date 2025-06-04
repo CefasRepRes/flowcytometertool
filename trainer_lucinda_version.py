@@ -150,7 +150,9 @@ class UnifiedApp:
         self.build_blob_tools_tab()
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
-        self.build_local_watcher_tab()        
+        self.build_local_watcher_tab()   
+        self.build_expertise_matrix_editor()
+        
 
     def generate_mixfile(self):
         try:
@@ -165,7 +167,80 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, nogui=False)
+        combined_df = combine_csvs(self.output_path, "expertise_matrix.csv", nogui=False)
+        # Further processing with combined_df if needed
+
+
+
+    def build_expertise_matrix_editor(self):
+        self.tab_expertise = ttk.Frame(self.root)
+        self.root.nametowidget(".!notebook").add(self.tab_expertise, text="Edit Expertise Matrix")
+
+        self.tree = ttk.Treeview(self.tab_expertise, show="headings")
+        self.tree.pack(expand=True, fill="both", padx=10, pady=10)
+
+        try:
+            df = pd.read_csv("expertise_matrix.csv")
+            self.expertise_df = df
+            self.tree["columns"] = list(df.columns)
+
+            for col in df.columns:
+                self.tree.heading(col, text=col)
+                self.tree.column(col, width=100)
+
+            for _, row in df.iterrows():
+                self.tree.insert("", "end", values=list(row))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load expertise_matrix.csv:\n{e}")
+            return
+
+        self.tree.bind("<Double-1>", self.on_double_click)
+
+        save_btn = tk.Button(self.tab_expertise, text="Save Changes", command=self.save_expertise_matrix)
+        save_btn.pack(pady=10)
+
+    def on_double_click(self, event):
+        region = self.tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+
+        row_id = self.tree.identify_row(event.y)
+        column = self.tree.identify_column(event.x)
+        col_index = int(column[1:]) - 1
+
+        x, y, width, height = self.tree.bbox(row_id, column)
+        value = self.tree.set(row_id, column)
+
+        entry = tk.Entry(self.tree)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, value)
+        entry.focus()
+
+        def on_focus_out(event):
+            new_value = entry.get()
+            if col_index > 0:  # Only validate numeric columns
+                if new_value not in {"1", "2", "3"}:
+                    messagebox.showerror("Invalid Input", "Please enter 1, 2, or 3.")
+                    entry.destroy()
+                    return
+            self.tree.set(row_id, column, new_value)
+            entry.destroy()
+
+        entry.bind("<FocusOut>", on_focus_out)
+        entry.bind("<Return>", lambda e: on_focus_out(e))
+
+    def save_expertise_matrix(self):
+        try:
+            rows = []
+            for item in self.tree.get_children():
+                rows.append(self.tree.item(item)["values"])
+            df = pd.DataFrame(rows, columns=self.expertise_df.columns)
+            df.to_csv("expertise_matrix.csv", index=False)
+            messagebox.showinfo("Saved", "Expertise matrix saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Failed to save file:\n{e}")
+
+
 
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
