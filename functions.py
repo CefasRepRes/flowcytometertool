@@ -120,20 +120,16 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
         }
 
         print("Zone choices:", zonechoices)
+        print("expertise_levels:", expertise_levels)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
-        print("Unique weights:", list(set(combined_df['weight'])))
-        print("Original source labels:", list(set(combined_df['source_label'])))
-        print('Only keeping particles with greatest weighting')
-        combined_df = combined_df[combined_df['weight'] == np.nanmax(combined_df['weight'])]
-        print("Filtered weights:", list(set(combined_df['weight'])))
         combined_df['source_label'] = [
             re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
         ]
         combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
         print('Cleaned group names to something consistent')
         print("Cleaned source labels:", list(set(combined_df['source_label'])))
-        print("Now dropping columns: ['weight', 'consensus_label', 'sample_weight']")
-        combined_df = combined_df.drop(columns=['weight', 'consensus_label', 'sample_weight'])
+        print("Now dropping columns: ['weight', 'consensus_label']")
+        combined_df = combined_df.drop(columns=['weight', 'consensus_label'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -483,21 +479,31 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     combined_df = pd.concat(all_data, ignore_index=True)
     combined_df.columns = combined_df.columns.str.replace(r'\s+', '_', regex=True)
     combined_df = combined_df.dropna()
+    print(combined_df)
     
-    # Apply weighted majority vote for consensus labels
-    combined_df['weight'] = combined_df['person'].apply(lambda x: next((expertise_weights[level] for level, people in expertise_levels.items() if x in people), 1))
-    combined_df['weighted_label'] = combined_df.groupby(['source_label', 'person'])['weight'].transform('sum')
+    # Flatten the expertise_levels into a person-to-weight mapping
+    person_to_weight = {
+        person: expertise_weights[level]
+        for level, people in expertise_levels.items()
+        for person in people
+    }
 
-    # Determine the final label for each particle
-    consensus_labels = combined_df.groupby('source_label')['weighted_label'].agg(lambda x: x.idxmax())
-    combined_df['consensus_label'] = combined_df['source_label'].map(consensus_labels)
+    # Assign person weights
+    combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
+
+    # Compute consensus label per particle using weighted votes (summing everyone's expertise weight by particle and label)
+    # This approach will not actually remove any particles. Rather it just sums the weight, meaning the opinion of a nonexpert is only 1/3 of the expert, but it would still be taken into account. You may want to change this to have expert priority instead.
+    combined_df = (
+        combined_df.groupby(['id', 'source_label'])['weight']
+        .sum()
+        .reset_index()
+        .sort_values(['id', 'weight'], ascending=[True, False])
+        .drop_duplicates('id')
+    )
     
-    # Assign sample weights based on agreement level
-    combined_df['sample_weight'] = combined_df.groupby('source_label')['consensus_label'].transform('count') / combined_df.groupby('source_label')['consensus_label'].transform('size')
-    
-    # Remove individual people columns
-    combined_df = combined_df.drop(columns=['person', 'weighted_label'])
-    
+    combined_df = combined_df.reset_index()
+    combined_df['consensus_label'] = combined_df['source_label']
+    print(combined_df)
     return combined_df
 
 
