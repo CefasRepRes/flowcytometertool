@@ -309,15 +309,15 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   
   # Set the inner cross-validation  objects (hyperparameters tuning)
   # Dummy classifier (done in grid search because of few number of candidates)
-  inner_dummy = GridSearchCV(estimator = dummy_clf, param_grid = parameters_dummy, cv = inner_cv, n_jobs = cores, scoring = make_scorer(matthews_corrcoef), verbose=10)
+  inner_dummy = GridSearchCV(estimator = dummy_clf, param_grid = parameters_dummy, cv = inner_cv, n_jobs = cores, scoring = scorer, verbose=10)
   
   # For all other classifiers (halving random search because of the huge number of candidates)
-  inner_models_halving = HalvingRandomSearchCV(estimator = pipe, param_distributions = parameters, factor = 2, min_resources = 50, cv = inner_cv, error_score = "raise", n_jobs = cores, scoring = make_scorer(matthews_corrcoef), verbose=10, random_state = rng)#, aggressive_elimination=True)
+  inner_models_halving = HalvingRandomSearchCV(estimator = pipe, param_distributions = parameters, factor = 2, min_resources = 50, cv = inner_cv, error_score = "raise", n_jobs = cores, scoring = scorer, verbose=10, random_state = rng)#, aggressive_elimination=True)
   
   # Run the nested cross-validation 
   # For Dummy classifier
   dummy_start_time = time()
-  outer_dummy = cross_validate(estimator = inner_dummy, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, error_score = "raise", params={"sample_weight": sample_weights, "groups": groups})
+  outer_dummy = cross_validate(estimator = inner_dummy, X = X_train, y = y_train, cv = outer_cv, scoring = scorer, verbose=10, return_estimator=True, error_score = "raise", params={"sample_weight": sample_weights, "groups": groups})
   dummy_stop_time = time() - dummy_start_time
   print(f"Time elapsed for Dummy Classifier : {dummy_stop_time} s \n")
   
@@ -327,7 +327,7 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   
   # For all other classifiers
   hrscv_start_time = time()
-  outer_models = cross_validate(estimator = inner_models_halving, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, n_jobs = cores, error_score = "raise",  params={"sample_weight": sample_weights, "groups": groups}) # why does this line not specify 
+  outer_models = cross_validate(estimator = inner_models_halving, X = X_train, y = y_train, cv = outer_cv, scoring = scorer, verbose=10, return_estimator=True, n_jobs = cores, error_score = "raise",  params={"sample_weight": sample_weights, "groups": groups}) # why does this line not specify 
   hrscv_stop_time = time() - hrscv_start_time
   print(f"Time elapsed for Halving Randomized Search : {hrscv_stop_time} s \n")
   
@@ -458,7 +458,7 @@ def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_fina
     train_sizes = train_sizes, # list of training set sizes to try
     cv = cv, # the CV strategy
     score_type = "both", # score both train and test scores to check under/overfitting
-    scoring = make_scorer(matthews_corrcoef), # scoring method
+    scoring = scorer, # scoring method
     score_name = "Matthews Correlation Coefficient", # name of the scoring method as it will appear on the plot
     std_display_style = "errorbar", # display error bars
     n_jobs = cores, # number of cores to use
