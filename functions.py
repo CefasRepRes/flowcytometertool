@@ -438,6 +438,48 @@ def choose_zone_folders(output_path):
     zonechoice = simpledialog.askstring("Zone Choice", f"Choose a zone from: {', '.join(folders)}")
     return zonechoice
 
+from scipy.stats import mode
+import pandas as pd
+from collections import Counter
+
+def compute_consensual_labels_and_sample_weights(data):
+    def get_weighted_mode(labels, weights):
+        counter = Counter()
+        for label, weight in zip(labels, weights):
+            counter[label] += weight
+        most_common_label, most_common_weight = counter.most_common(1)[0]
+        return most_common_label, most_common_weight
+
+    # Group by id
+    grouped = data.groupby('id')
+
+    # Initialize lists to store results
+    consensus_labels = []
+    sample_weights = []
+
+    for name, group in grouped:
+        labels = group['source_label']
+        weights = group['weight']
+        consensus_label, consensus_weight = get_weighted_mode(labels, weights)
+        total_weight = weights.sum()
+        sample_weight = consensus_weight / total_weight
+        consensus_labels.append(consensus_label)
+        sample_weights.append(sample_weight)
+
+    # Create a new DataFrame with the results
+    result_df = pd.DataFrame({
+        'id': grouped.groups.keys(),
+        'consensus_label': consensus_labels,
+        'weight': sample_weights
+    })
+
+    # Remove unassigned particles
+    result_df = result_df[result_df['consensus_label'] != "Unassigned Particles"]
+
+    return result_df
+
+
+
 def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     """
     Build a consensual dataset from flow cytometry CSV files.
@@ -491,18 +533,11 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     # Assign person weights
     combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
 
-    # Compute consensus label per particle using weighted votes (summing everyone's expertise weight by particle and label)
-    # This approach will not actually remove any particles. Rather it just sums the weight, meaning the opinion of a nonexpert is only 1/3 of the expert, but it would still be taken into account. You may want to change this to have expert priority instead.
-    combined_df = (
-        combined_df.groupby(['id', 'source_label'])['weight']
-        .sum()
-        .reset_index()
-        .sort_values(['id', 'weight'], ascending=[True, False])
-        .drop_duplicates('id')
-    )
-    
+    # Compute consensus label per particls
+    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    combined_df['source_label'] = combined_df['consensus_label']
+    print(combined_df)
     combined_df = combined_df.reset_index()
-    combined_df['consensus_label'] = combined_df['source_label']
     print(combined_df)
     return combined_df
 
