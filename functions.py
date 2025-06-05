@@ -636,15 +636,15 @@ def train_classifier(df, model_path):
         target_name="source_label",
         group_name="group",
         weight_name="weight",
-        inner_k=2,
-        outer_k=2,
         select_K=5,
         cores=cores,
-        lc_k=2,
         n_sizes=2,
         filename_cvResults="cv_results.csv",
         filename_learningCurve="learning_curve.png",
-        filename_finalFittedModel=model_path
+        filename_finalFittedModel=model_path,
+        filename_finalCalibratedModel='calibrated'+model_path,
+        validation_set = test_df,
+        
     )
 
     # Evaluate on test set

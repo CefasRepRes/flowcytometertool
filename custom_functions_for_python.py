@@ -184,7 +184,8 @@ def splitTrainingSet(training_set, target_name, group_name, weight_name):
     return X_train, y_train, groups, sample_weights
   
 
-def createParametersList(logreg_clf, rf_clf, hgb_clf):
+
+def createParametersList(logreg_clf, svm_clf, rf_clf, hgb_clf):
   """This function creates a list with all the hyperparameters range to be used in the tuning process, it needs the classifiers used as argument 
   (you can modify the arguments of this function if you want to use other classifiers than the default ones, you can also modify the default hyperparameters and their range)"""
   
@@ -217,6 +218,7 @@ def createParametersList(logreg_clf, rf_clf, hgb_clf):
   # Random Forest
   MTRY = uniform(0.1, 0.9)
   SAMPLE_FRACTION = uniform(0.1, 0.9)
+  NTREES = uniform_int(100, 900)
   # Histogram-based Gradient Boosting
   MAX_DEPTH = uniform_int(1, 14)
   MAX_FEATURES = uniform(0.1, 0.9)
@@ -231,17 +233,18 @@ def createParametersList(logreg_clf, rf_clf, hgb_clf):
     'classifier__l1_ratio': L1_RATIO,
   }
   # Support Vector Machines
-#  parameters_svm = {
-#    #'selector__k': FEATURES_SIZES,
-#    'classifier': [svm_clf],
-#    'classifier__kernel': ('linear', 'poly', 'rbf', 'sigmoid'),
-#    'classifier__degree': POLY_DEGREE,
-#    'classifier__gamma': GAMMA,
-#  }
+  parameters_svm = {
+    #'selector__k': FEATURES_SIZES,
+    'classifier': [svm_clf],
+    'classifier__kernel': ('linear', 'poly', 'rbf', 'sigmoid'),
+    'classifier__degree': POLY_DEGREE,
+    'classifier__gamma': GAMMA,
+  }
   # Random Forest
   parameters_rf = {
     #'selector__k': FEATURES_SIZES,
     'classifier': [rf_clf],
+    'classifier__n_estimators': NTREES,
     'classifier__max_features': MTRY,
     'classifier__max_samples': SAMPLE_FRACTION,
   }
@@ -249,24 +252,25 @@ def createParametersList(logreg_clf, rf_clf, hgb_clf):
   parameters_hgb = {
     #'selector__k': FEATURES_SIZES,
     'classifier': [hgb_clf],
+    'classifier__max_iter': NTREES,
     'classifier__max_depth': MAX_DEPTH,
     'classifier__max_features': MAX_FEATURES,
     'classifier__learning_rate' : LEARNING_RATE,
+    
   }
   # Finally pool all dictionaries together in a list
-  parameters = [parameters_logreg, parameters_rf, parameters_hgb]
+  parameters = [parameters_logreg, parameters_svm, parameters_rf, parameters_hgb]
   return parameters
 
 
-def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, weight_name, cores, select_K):
+
+def applyNestedCrossValidation(rng, training_set, target_name, group_name, weight_name, cores, select_K):
   """This function applies the nested cross validation process
   It starts by splitting the training set, set the classifiers to be used and the base pipeline
   Then it creates the parameters list to be used in tuning, sets the spliting objects for cross-validation
   Finally the inner cross-validation object is created and passed to the cross_validate for the outer cross-validation"""
   
   # Make sure the numbers given as argument are integer
-  inner_k = int(inner_k)
-  outer_k = int(outer_k)
   cores = int(cores)
   select_K = int(select_K)
   
@@ -276,9 +280,9 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   # Set the classifiers to be tested
   dummy_clf = DummyClassifier(random_state = rng).set_fit_request(sample_weight=True)
   logreg_clf = LogisticRegression(random_state = rng, class_weight = 'balanced', penalty = 'elasticnet', solver = 'saga').set_fit_request(sample_weight=True)
-  #svm_clf = SVC(random_state = rng, class_weight = 'balanced')
-  rf_clf = RandomForestClassifier(random_state = rng, class_weight = 'balanced', n_estimators = 500).set_fit_request(sample_weight=True)
-  hgb_clf = HistGradientBoostingClassifier(random_state = rng, class_weight = 'balanced', max_iter = 500).set_fit_request(sample_weight=True)
+  svm_clf = SVC(random_state = rng, class_weight = 'balanced').set_fit_request(sample_weight=True)
+  rf_clf = RandomForestClassifier(random_state = rng, class_weight = 'balanced').set_fit_request(sample_weight=True)
+  hgb_clf = HistGradientBoostingClassifier(random_state = rng, class_weight = 'balanced').set_fit_request(sample_weight=True)
   
   # Set the feature selection method
   #nfeats = X_train.shape[1]
@@ -298,7 +302,7 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   }
   
   # All other classifiers
-  parameters = createParametersList(logreg_clf = logreg_clf, rf_clf = rf_clf, hgb_clf = hgb_clf)#, svm_clf = svm_clf
+  parameters = createParametersList(logreg_clf = logreg_clf, svm_clf = svm_clf, rf_clf = rf_clf, hgb_clf = hgb_clf)
   
   # Set the inner and outer splitters for cross-validation 
   inner_cv = LeaveOneGroupOut()
@@ -309,15 +313,46 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   
   # Set the inner cross-validation  objects (hyperparameters tuning)
   # Dummy classifier (done in grid search because of few number of candidates)
-  inner_dummy = GridSearchCV(estimator = dummy_clf, param_grid = parameters_dummy, cv = inner_cv, n_jobs = cores, scoring = scorer, verbose=10)
+  inner_dummy = GridSearchCV(
+    estimator = dummy_clf, 
+    param_grid = parameters_dummy, 
+    cv = inner_cv, 
+    n_jobs = cores, 
+    scoring = scorer, 
+    verbose=10
+  )
   
   # For all other classifiers (halving random search because of the huge number of candidates)
-  inner_models_halving = HalvingRandomSearchCV(estimator = pipe, param_distributions = parameters, factor = 2, min_resources = 50, cv = inner_cv, error_score = "raise", n_jobs = cores, scoring = scorer, verbose=10, random_state = rng)#, aggressive_elimination=True)
+  inner_models_halving = HalvingRandomSearchCV(
+    estimator = pipe, 
+    param_distributions = parameters, 
+    factor = 2, 
+    min_resources = 50, 
+    cv = inner_cv, 
+    error_score = "raise", 
+    return_train_score = True,
+    n_jobs = cores, 
+    scoring = scorer, 
+    verbose=10, 
+    random_state = rng
+  )
+  
+  print("Starting Nested Cross Validation ... \n")
   
   # Run the nested cross-validation 
   # For Dummy classifier
   dummy_start_time = time()
-  outer_dummy = cross_validate(estimator = inner_dummy, X = X_train, y = y_train, cv = outer_cv, scoring = scorer, verbose=10, return_estimator=True, error_score = "raise", params={"sample_weight": sample_weights, "groups": groups})
+  outer_dummy = cross_validate(
+    estimator = inner_dummy, 
+    X = X_train, 
+    y = y_train, 
+    cv = outer_cv, 
+    scoring = scorer, 
+    verbose=10, 
+    return_estimator=True, 
+    error_score = "raise", 
+    params={"sample_weight": sample_weights, "groups": groups}
+  )
   dummy_stop_time = time() - dummy_start_time
   print(f"Time elapsed for Dummy Classifier : {dummy_stop_time} s \n")
   
@@ -327,7 +362,17 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   
   # For all other classifiers
   hrscv_start_time = time()
-  outer_models = cross_validate(estimator = inner_models_halving, X = X_train, y = y_train, cv = outer_cv, scoring = scorer, verbose=10, return_estimator=True, n_jobs = cores, error_score = "raise",  params={"sample_weight": sample_weights, "groups": groups}) # why does this line not specify 
+  outer_models = cross_validate(
+    estimator = inner_models_halving, 
+    X = X_train, 
+    y = y_train,
+    cv = outer_cv, 
+    scoring = scorer, 
+    verbose=10, 
+    return_estimator=True, 
+    error_score = "raise", 
+    params={"sample_weight": sample_weights, "groups": groups}
+  )
   hrscv_stop_time = time() - hrscv_start_time
   print(f"Time elapsed for Halving Randomized Search : {hrscv_stop_time} s \n")
   
@@ -336,8 +381,6 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   print(f"Outer CV scores = {scores} \n")
   
   return outer_models, inner_models_halving, scores
-
-
 def fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name, weight_name):
   """Runs a final hyperparameters tuning process after nested cross-validation and save the best candidate as final model"""
   # Split the training set into X_train, y_train and groups objects
@@ -346,7 +389,7 @@ def fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training
   # Train and fit final classifier with hyperparameters tuning
   print("Fitting final classifier on entire data set... \n")
   cv_start_time = time()
-  final_search = inner_models_halving.fit(X = X_train, y = y_train, groups = groupss, sample_weight = sample_weights) # ou classifier__sample_weight
+  final_search = inner_models_halving.fit(X = X_train, y = y_train, groups = groups, sample_weight = sample_weights) # ou classifier__sample_weight
   cv_stop_time = time() - cv_start_time
   print(f"Done ! Time elapsed : {cv_stop_time} s \n")
   
@@ -484,31 +527,31 @@ def getFinalResults(fitted_final_classifier):
   print(f"The final Classifier is : \n {fitted_final_classifier}")
 
 
-def buildSupervisedClassifier(training_set, target_name, group_name, weight_name, inner_k, outer_k, select_K, cores, lc_k, n_sizes, filename_cvResults, filename_learningCurve, filename_finalFittedModel):
+def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve):
   """Function that runs the entire supervised classifier building process by calling the other custom functions"""
-  
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
+  
   # To be able to use groups and sample weights
   sklearn.set_config(enable_metadata_routing=True)
-
-  # Run the nested cross-validation step
-  outer_models, inner_models_halving, scores = applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, weight_name, cores, select_K)
   
-  # Train, fit and save final model
+  # Run the nested cross-validation step
+  outer_models, inner_models_halving, scores = applyNestedCrossValidation(rng, training_set, target_name, group_name, weight_name, cores, select_K)
+  
+  # Fit and save final model
   fitted_final_classifier = fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name, weight_name)
   
   # Save the nested cross-validation detailed results
   saveNestedCvResults(outer_models, filename_cvResults, scores)
   
-  # Build and save the learning curve
-  buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
-
-  # Calibrate the classifier would go here
-  #calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)  
-
   # Print the main results
   getFinalResults(fitted_final_classifier)
+  
+  # Build and save the learning curve
+  buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
+  
+  # Calibrate the classifier
+  calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
 
 
 ########################## Apply Supervised Classifier #########################
