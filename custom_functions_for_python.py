@@ -16,7 +16,7 @@ from functools import partial
 # For machine learning workflow
 import sklearn
 from sklearn.experimental import enable_halving_search_cv
-from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, cross_validate, StratifiedGroupKFold, LearningCurveDisplay, HalvingRandomSearchCV, ValidationCurveDisplay
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, cross_validate, LeaveOneGroupOut, StratifiedGroupKFold, learning_curve, HalvingRandomSearchCV, ValidationCurveDisplay
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 from sklearn.pipeline import Pipeline
@@ -166,7 +166,7 @@ column_rename_map_from_copilot = {
 }
 
 
-def splitTrainingSet(training_set, target_name, group_name):
+def splitTrainingSet(training_set, target_name, group_name, weight_name):
     """
     Splits the training set into three objects:
     - X_train: features table
@@ -176,12 +176,13 @@ def splitTrainingSet(training_set, target_name, group_name):
     """
     y_train = training_set[target_name]
     # List of columns to drop if present
-    columns_to_drop = [target_name, group_name, "Particle_ID", "TriggerLevel"]
+    columns_to_drop = [target_name, group_name, weight_name, "Particle_ID", "TriggerLevel"]
     existing_columns_to_drop = [col for col in columns_to_drop if col in training_set.columns]
     X_train = training_set.drop(columns=existing_columns_to_drop)
     groups = training_set[group_name]
-    return X_train, y_train, groups
-
+    sample_weights = training_set[weight_name]
+    return X_train, y_train, groups, sample_weights
+  
 
 def createParametersList(logreg_clf, rf_clf, hgb_clf):
   """This function creates a list with all the hyperparameters range to be used in the tuning process, it needs the classifiers used as argument 
@@ -257,7 +258,7 @@ def createParametersList(logreg_clf, rf_clf, hgb_clf):
   return parameters
 
 
-def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, cores, select_K):
+def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, weight_name, cores, select_K):
   """This function applies the nested cross validation process
   It starts by splitting the training set, set the classifiers to be used and the base pipeline
   Then it creates the parameters list to be used in tuning, sets the spliting objects for cross-validation
@@ -269,15 +270,15 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   cores = int(cores)
   select_K = int(select_K)
   
-  # Split the training set into X_train, y_train and groups objects
-  X_train, y_train, groups = splitTrainingSet(training_set, target_name, group_name)
+  # Split the training set into X_train, y_train, groups and sample weights objects
+  X_train, y_train, groups, sample_weights = splitTrainingSet(training_set, target_name, group_name, weight_name)
   
   # Set the classifiers to be tested
-  dummy_clf = DummyClassifier(random_state = rng)
-  logreg_clf = LogisticRegression(random_state = rng, class_weight = 'balanced', penalty = 'elasticnet', solver = 'saga')
+  dummy_clf = DummyClassifier(random_state = rng).set_fit_request(sample_weight=True)
+  logreg_clf = LogisticRegression(random_state = rng, class_weight = 'balanced', penalty = 'elasticnet', solver = 'saga').set_fit_request(sample_weight=True)
   #svm_clf = SVC(random_state = rng, class_weight = 'balanced')
-  rf_clf = RandomForestClassifier(random_state = rng, class_weight = 'balanced', n_estimators = 500)
-  hgb_clf = HistGradientBoostingClassifier(random_state = rng, class_weight = 'balanced', max_iter = 500)
+  rf_clf = RandomForestClassifier(random_state = rng, class_weight = 'balanced', n_estimators = 500).set_fit_request(sample_weight=True)
+  hgb_clf = HistGradientBoostingClassifier(random_state = rng, class_weight = 'balanced', max_iter = 500).set_fit_request(sample_weight=True)
   
   # Set the feature selection method
   #nfeats = X_train.shape[1]
@@ -286,7 +287,7 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   # Set the base pipeline
   pipe = Pipeline([
     ('selector', features_selector),
-    ('scaler', StandardScaler()),
+    ('scaler', StandardScaler().set_fit_request(sample_weight=True)),
     ('classifier', 'passthrough')
     ])
   
@@ -300,10 +301,11 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   parameters = createParametersList(logreg_clf = logreg_clf, rf_clf = rf_clf, hgb_clf = hgb_clf)#, svm_clf = svm_clf
   
   # Set the inner and outer splitters for cross-validation 
-  sklearn.set_config(enable_metadata_routing=True) # to be able to use groups in cross_validate
+  inner_cv = LeaveOneGroupOut()
+  outer_cv = LeaveOneGroupOut()
   
-  inner_cv = StratifiedGroupKFold(n_splits=inner_k, shuffle = True, random_state = 42)
-  outer_cv = StratifiedGroupKFold(n_splits=outer_k, shuffle = True, random_state = 42)
+  # scoring function
+  scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
   
   # Set the inner cross-validation  objects (hyperparameters tuning)
   # Dummy classifier (done in grid search because of few number of candidates)
@@ -315,7 +317,7 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   # Run the nested cross-validation 
   # For Dummy classifier
   dummy_start_time = time()
-  outer_dummy = cross_validate(estimator = inner_dummy, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, error_score = "raise", params={"groups": groups})
+  outer_dummy = cross_validate(estimator = inner_dummy, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, error_score = "raise", params={"sample_weight": sample_weights, "groups": groups})
   dummy_stop_time = time() - dummy_start_time
   print(f"Time elapsed for Dummy Classifier : {dummy_stop_time} s \n")
   
@@ -325,7 +327,7 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   
   # For all other classifiers
   hrscv_start_time = time()
-  outer_models = cross_validate(estimator = inner_models_halving, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, n_jobs = cores, error_score = "raise", params={"groups": groups}) # why does this line not specify 
+  outer_models = cross_validate(estimator = inner_models_halving, X = X_train, y = y_train, cv = outer_cv, scoring = make_scorer(matthews_corrcoef), verbose=10, return_estimator=True, n_jobs = cores, error_score = "raise",  params={"sample_weight": sample_weights, "groups": groups}) # why does this line not specify 
   hrscv_stop_time = time() - hrscv_start_time
   print(f"Time elapsed for Halving Randomized Search : {hrscv_stop_time} s \n")
   
@@ -336,15 +338,15 @@ def applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name,
   return outer_models, inner_models_halving, scores
 
 
-def fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name):
+def fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name, weight_name):
   """Runs a final hyperparameters tuning process after nested cross-validation and save the best candidate as final model"""
   # Split the training set into X_train, y_train and groups objects
-  X_train, y_train, groups = splitTrainingSet(training_set, target_name, group_name)
+  X_train, y_train, groups, sample_weights = splitTrainingSet(training_set, target_name, group_name, weight_name)
   
   # Train and fit final classifier with hyperparameters tuning
   print("Fitting final classifier on entire data set... \n")
   cv_start_time = time()
-  final_search = inner_models_halving.fit(X = X_train, y = y_train, groups = groups)
+  final_search = inner_models_halving.fit(X = X_train, y = y_train, groups = groupss, sample_weight = sample_weights) # ou classifier__sample_weight
   cv_stop_time = time() - cv_start_time
   print(f"Done ! Time elapsed : {cv_stop_time} s \n")
   
@@ -387,7 +389,45 @@ def saveNestedCvResults(outer_models, filename_cvResults, scores):
   all_dfs.to_csv(filename_cvResults)
 
 
-def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, rng):
+
+def calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel):
+  """Function to calibrate a fitted classifier to get a probabilistic classifier"""
+  
+  cores = int(cores)
+  
+  # Split the validation set into X_valid, y_valid, groups and sample weights objects
+  X_valid, y_valid, groups, sample_weights = splitTrainingSet(validation_set, target_name, group_name, weight_name)
+  
+  # Set the cross validation splitter
+  cv = list(LeaveOneGroupOut().split(X_valid, y_valid, groups=groups))
+  
+  print("Calibrating classifier ...")
+  calibration_start_time = time()
+  
+  # Calibration
+  calibrated_classifier = CalibratedClassifierCV(
+    estimator=FrozenEstimator(fitted_final_classifier), 
+    method = 'isotonic', 
+    cv = cv, 
+    n_jobs = cores
+  )
+  
+  fitted_calibrated_classifier = calibrated_classifier.fit(
+    X = X_valid, 
+    y = y_valid, 
+    sample_weight = sample_weights
+  )
+  
+  print("Done ! Saving calibrated classifier ...")
+  
+  joblib.dump(fitted_calibrated_classifier, filename_finalCalibratedModel)
+  
+  calibration_stop_time = time() - calibration_start_time
+  print(f"Done ! Time elapsed : {calibration_stop_time} s \n")
+
+
+
+def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng):
   """This function builds and save the plot of a learning curve to assess that the final model doesn't under/over-fit"""
   
   # Make sure the numbers given as argument are integer
@@ -395,14 +435,17 @@ def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_fina
   cores = int(cores)
   n_sizes = int(n_sizes)
   
-  # Split the training set into X_train, y_train and groups objects
-  X_train, y_train, groups = splitTrainingSet(training_set, target_name, group_name)
+  # Split the training set into X_train, y_train, groups and sample weights objects
+  X_train, y_train, groups, sample_weights = splitTrainingSet(training_set, target_name, group_name, weight_name)
   
   # Set the training set sizes to try
   train_sizes = np.linspace(0.1, 1.0, num = n_sizes, endpoint = True)
   
   # Set the cross validation splitter
-  cv = StratifiedGroupKFold(n_splits=lc_k, shuffle = True, random_state = rng)
+  cv = LeaveOneGroupOut()
+  
+  # scoring function
+  scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
   
   # Unlike for cross_validate, we don't need to enable metadata to be able to use the group argument for CV if needed so we can disable the metadata routing
   sklearn.set_config(enable_metadata_routing=False)
@@ -419,7 +462,8 @@ def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_fina
     score_name = "Matthews Correlation Coefficient", # name of the scoring method as it will appear on the plot
     std_display_style = "errorbar", # display error bars
     n_jobs = cores, # number of cores to use
-    groups = groups # if the CV strategy uses groups
+    groups = groups, # if the CV strategy uses groups
+    sample_weight = sample_weights # if the CV strategy uses groups
   )
   
   # Make log axis and add title
@@ -440,24 +484,29 @@ def getFinalResults(fitted_final_classifier):
   print(f"The final Classifier is : \n {fitted_final_classifier}")
 
 
-def buildSupervisedClassifier(training_set, target_name, group_name, inner_k, outer_k, select_K, cores, lc_k, n_sizes, filename_cvResults, filename_learningCurve, filename_finalFittedModel):
+def buildSupervisedClassifier(training_set, target_name, group_name, weight_name, inner_k, outer_k, select_K, cores, lc_k, n_sizes, filename_cvResults, filename_learningCurve, filename_finalFittedModel):
   """Function that runs the entire supervised classifier building process by calling the other custom functions"""
   
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
-  
+  # To be able to use groups and sample weights
+  sklearn.set_config(enable_metadata_routing=True)
+
   # Run the nested cross-validation step
-  outer_models, inner_models_halving, scores = applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, cores, select_K)
+  outer_models, inner_models_halving, scores = applyNestedCrossValidation(rng, inner_k, outer_k, training_set, target_name, group_name, weight_name, cores, select_K)
   
   # Train, fit and save final model
-  fitted_final_classifier = fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name)
+  fitted_final_classifier = fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name, weight_name)
   
   # Save the nested cross-validation detailed results
   saveNestedCvResults(outer_models, filename_cvResults, scores)
   
   # Build and save the learning curve
-  buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, rng)
-  
+  buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
+
+  # Calibrate the classifier would go here
+  #calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)  
+
   # Print the main results
   getFinalResults(fitted_final_classifier)
 
@@ -507,7 +556,7 @@ def predictPhyto(model_path, classifier_name, predict_name, data):
   return preds_test
 
 
-def comparePrediction(data, preds_test, target_name, cm_filename, model_path, classifier_name):
+def comparePrediction(data, preds_test, target_name, weight_name, cm_filename, model_path, classifier_name):
   """Function to assess the generalization performance of the final model by comparing its predicted label of the test set to the manual labels"""
   
   # Load Classifier to get the class names
@@ -515,11 +564,18 @@ def comparePrediction(data, preds_test, target_name, cm_filename, model_path, cl
   
   # Get the manual labels
   y_test = data[target_name]
+  sample_weights = data[weight_name]
+  
   
   # Print the results of various metrics scores between manual and predicted labels
   print(f"Test Matthews Correlation Coefficient score = {matthews_corrcoef(y_test, preds_test)} \n")
   print(f"Test Balanced Accuracy score = {balanced_accuracy_score(y_test, preds_test)} \n")
-  print(classification_report(y_test, preds_test))
+  print(f"Classification report : \n {classification_report(y_test, preds_test, sample_weight = sample_weights)} \n", file=file)
+
+  report = pd.DataFrame(classification_report(y_test, preds_test, output_dict=True, sample_weight = sample_weights))
+  report['metric'] = ('precision', 'recall', 'f1-score', 'support')
+  report.to_csv(report_filename, index=False)
+  print("Classification report saved ! \n")
   
   # Create the confusion matrix between manual and predicted labels
   cm = pd.DataFrame(confusion_matrix(y_test, preds_test, labels = classes))
@@ -532,13 +588,13 @@ def comparePrediction(data, preds_test, target_name, cm_filename, model_path, cl
   cm.to_csv(cm_filename)
 
 
-def predictTestSet(model_path, classifier_name, predict_name, data, target_name, cm_filename):
+def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name, cm_filename):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
   preds_test = predictPhyto(model_path, classifier_name, predict_name, data)
-  comparePrediction(data, preds_test, target_name, cm_filename, model_path, classifier_name)
+  comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, classifier_name, text_file)
 
 
-def getPermutationImportance(data, model_path, classifier_name, target_name, cores, filename_importance):
+def getPermutationImportance(data, nb_repeats, classifier_name, target_name, weight_name, cores, filename_importance):
   """Function to measure the permutation importance of the variables used in the final model"""
   
   # Load the model
@@ -547,17 +603,22 @@ def getPermutationImportance(data, model_path, classifier_name, target_name, cor
   # Get the manual labels and the features table
   y = data[target_name]
   X = data[features]
+  sample_weights = data[weight_name]
   
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
   
   # Make sure the number given as argument is integer
   cores = int(cores)
+    
+  # to be able to use sample weights
+  sklearn.set_config(enable_metadata_routing=True)
   
   print("Computation of Permutation Importance... \n")
   
   # Compute the permutation importance calculation
-  permutation = permutation_importance(estimator = fitted_final_classifier, X = X, y = y, scoring = make_scorer(matthews_corrcoef), n_repeats=10, n_jobs = cores, random_state = rng)
+  permutation = permutation_importance(estimator = fitted_final_classifier, X = X, y = y, scoring = scorer, n_repeats=nb_repeats, n_jobs = cores, random_state = rng, sample_weight = sample_weights)
+  print("Done ! Saving results ...")
   
   # Extract and save the results
   sorted_importances_idx = permutation.importances_mean.argsort()

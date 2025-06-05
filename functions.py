@@ -128,8 +128,8 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
         combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
         print('Cleaned group names to something consistent')
         print("Cleaned source labels:", list(set(combined_df['source_label'])))
-        print("Now dropping columns: ['weight', 'consensus_label']")
-        combined_df = combined_df.drop(columns=['weight', 'consensus_label'])
+        #print("Now dropping columns: ['weight', 'consensus_label']")
+        #combined_df = combined_df.drop(columns=['weight', 'consensus_label'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -635,6 +635,7 @@ def train_classifier(df, model_path):
         training_set=train_df,
         target_name="source_label",
         group_name="group",
+        weight_name="weight",
         inner_k=2,
         outer_k=2,
         select_K=5,

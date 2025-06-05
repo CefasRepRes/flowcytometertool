@@ -135,7 +135,7 @@ class UnifiedApp:
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
 
     def create_widgets(self):
-        self.redirect_stdout_to_gui()
+        #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
         tk.Label(self.root, text=f"Working Directory: {self.tool_dir}", fg="gray").pack(pady=(10, 0))
         notebook = ttk.Notebook(self.root)
         notebook.pack(expand=True, fill='both')
