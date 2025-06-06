@@ -16,7 +16,7 @@ from functools import partial
 # For machine learning workflow
 import sklearn
 from sklearn.experimental import enable_halving_search_cv
-from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, cross_validate, LeaveOneGroupOut, StratifiedGroupKFold, learning_curve, HalvingRandomSearchCV, ValidationCurveDisplay
+from sklearn.model_selection import LearningCurveDisplay, RandomizedSearchCV, GridSearchCV, cross_validate, LeaveOneGroupOut, StratifiedGroupKFold, learning_curve, HalvingRandomSearchCV, ValidationCurveDisplay
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest, mutual_info_classif
 from sklearn.pipeline import Pipeline
@@ -303,15 +303,15 @@ def applyNestedCrossValidation(rng, training_set, target_name, group_name, weigh
   
   # All other classifiers
   parameters = createParametersList(logreg_clf = logreg_clf, svm_clf = svm_clf, rf_clf = rf_clf, hgb_clf = hgb_clf)
-  
-  # How I used to have it, now causes error "ValueError: could not convert string to float: 'OraNano1'" 
-  # I wonder if that indicates that I am passing in variables differently now. I must be, since this used to work?
-  # I think a duplicate label column is being passed in as a predictor when before it was not
-  inner_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
-  outer_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
-  #This is what lucinda has, and it leaves the dummy training forever:
+  # Extra line to drop svm which seems to be slow and unlikely to ever be the preferred model anyway:
+  parameters = [p for p in parameters if not any(isinstance(v, list) and any('SVC' in str(clf) for clf in v) for k, v in p.items() if k == 'classifier')]  
+
+  #This is what lucinda has, but I have not honored the groups aspect (1 cyz file = 1 group):
   #inner_cv = LeaveOneGroupOut()
   #outer_cv = LeaveOneGroupOut()
+  # Possibly because Number of Splits for this method will equal to number of unique groups as in another script i define groups as df.index. That works to simply ignore groups, with this StratifiedGroupKFold instead of LeaveOneGroupOut():
+  inner_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
+  outer_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
   
   # scoring function
   scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
@@ -510,8 +510,8 @@ def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_fina
     score_name = "Matthews Correlation Coefficient", # name of the scoring method as it will appear on the plot
     std_display_style = "errorbar", # display error bars
     n_jobs = cores, # number of cores to use
-    groups = groups, # if the CV strategy uses groups
-    sample_weight = sample_weights # if the CV strategy uses groups
+    groups = groups#, # if the CV strategy uses groups
+    #sample_weight = sample_weights # if the CV strategy uses groups
   )
   
   # Make log axis and add title
@@ -553,7 +553,7 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
   getFinalResults(fitted_final_classifier)
   
   # Build and save the learning curve
-  buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
+  buildLearningCurve(n_sizes, 0, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
   
   # Calibrate the classifier
   calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
