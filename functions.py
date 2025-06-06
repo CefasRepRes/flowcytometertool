@@ -644,7 +644,7 @@ def train_classifier(df, model_path):
         filename_cvResults="cv_results.csv",
         filename_learningCurve="learning_curve.png",
         filename_finalFittedModel=model_path,
-        filename_finalCalibratedModel='calibrated'+model_path,
+        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
         validation_set = test_df,
         
     )
