@@ -28,6 +28,8 @@ from sklearn.metrics import matthews_corrcoef, f1_score, balanced_accuracy_score
 from sklearn.inspection import permutation_importance
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.frozen import FrozenEstimator
+from sklearn.model_selection import StratifiedKFold
+
 import joblib
 ################################################################################
 ############################# Custom Functions #################################
@@ -494,8 +496,9 @@ def buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_clas
   print(X_train)
 
   # Set the cross validation splitter
-  cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = rng)
-  
+  #cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = rng)
+  cv = StratifiedKFold(n_splits=2, shuffle=True, random_state=rng)
+
   # scoring function
   scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
   
@@ -515,7 +518,7 @@ def buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_clas
     random_state = rng, # random state for shuffling
     error_score = 'raise', # raise error if error in scoring when fitting the estimator
     return_times = True#,
-    #groups = groups#, # return scoring and fitting times
+    #groups = groups, # return scoring and fitting times
     #params = {"sample_weight": sample_weights, "groups": groups} # metadata params passed to fit and the scorer
   )
   
