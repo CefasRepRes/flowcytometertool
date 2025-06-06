@@ -33,6 +33,8 @@ class UnifiedApp:
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         model_dir = os.path.join(self.tool_dir, "models")
+        self.plots_dir = os.path.join(self.tool_dir, "plots")
+        os.makedirs(self.plots_dir, exist_ok=True)
         os.makedirs(model_dir, exist_ok=True)
         self.model_path = os.path.join(model_dir, "final_model.pkl")
         self.df = None
@@ -282,7 +284,7 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
-        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.model_path, nogui=False)).pack(pady=5)
+        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, nogui=False)).pack(pady=5)
         tk.Button(self.tab_download, text="Test Classifier", command=lambda: test_classifier(self.df, self.model_path, nogui=False)).pack(pady=5)
         self.build_expertise_matrix_editor(self.tab_download)
 

@@ -49,7 +49,7 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
     "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier"]
 
-def train_model(df, model_path, nogui=False):
+def train_model(df, plots_dir, model_path, nogui=False):
     try:
         if df is None:
             if nogui:
@@ -58,7 +58,7 @@ def train_model(df, model_path, nogui=False):
                 from tkinter import messagebox
                 messagebox.showerror("Error", "No data to train on.")
             return
-        train_classifier(df, model_path)
+        train_classifier(df, plots_dir, model_path)
         if nogui:
             print("Model training completed successfully.")
         else:
@@ -588,7 +588,7 @@ def plot_classifier_props(cv_results):
 
     return plotlist
 
-def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
+def plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir):
     def plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters):
         def plot_hyperpar_combi(cv_results, classifier_name, x_axis, y_axis):
             if x_axis == "degree" or y_axis == "degree":
@@ -618,11 +618,13 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
     for classifier_name, hyperparameters in classifiers_hyperpars.items():
         print(f"Plotting hyperparameter combinations for {classifier_name}")
         plot_list = plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters)
-        for plot in plot_list:
+        for i, plot in enumerate(plot_list):
+            plot.savefig(plots_dir+f'plots/plot_{i+1}.png')
             plot.show()
+            plot.close()
 
 
-def train_classifier(df, model_path):
+def train_classifier(df, plots_dir, model_path):
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
     # Detect if running from PyInstaller bundle
@@ -645,8 +647,7 @@ def train_classifier(df, model_path):
         filename_learningCurve="learning_curve.png",
         filename_finalFittedModel=model_path,
         filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
-        validation_set = test_df,
-        
+        validation_set = test_df       
     )
 
     # Evaluate on test set
@@ -664,14 +665,16 @@ def train_classifier(df, model_path):
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
     plt.title('Confusion Matrix')
+    plt.savefig(plots_dir+f'/confusionmatrix.png')
     plt.show()
+    
     
     cv_results = pd.read_csv("cv_results.csv")
 
     try:
         plot_cv_results(cv_results)
         plot_classifier_props(cv_results)
-        plot_all_hyperpars_combi_and_classifiers_scores(cv_results)
+        plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir)
     except Exception as e:
         print(f"Could not plot CV results: {e}")
 
@@ -961,6 +964,7 @@ def run_backend_only():
     output_path = os.path.join("extraction/")
     cyz2json_dir = os.path.join(tool_dir, "cyz2json")
     model_dir = os.path.join(tool_dir, "models")
+    plots_dir = os.path.join(tool_dir, "plots")
     model_path = os.path.join(model_dir, "final_model.pkl")
 
     os.makedirs(download_path, exist_ok=True)
@@ -993,7 +997,7 @@ def run_backend_only():
 
         # 6. Train Model
         print("🤖 Training model...")
-        train_model(df, model_path, nogui=True)
+        train_model(df, plots_dir, model_path, nogui=True)
 
         # 7. Test Classifier
         print("🧪 Testing classifier...")
