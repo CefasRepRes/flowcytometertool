@@ -304,9 +304,14 @@ def applyNestedCrossValidation(rng, training_set, target_name, group_name, weigh
   # All other classifiers
   parameters = createParametersList(logreg_clf = logreg_clf, svm_clf = svm_clf, rf_clf = rf_clf, hgb_clf = hgb_clf)
   
-  # Set the inner and outer splitters for cross-validation 
-  inner_cv = LeaveOneGroupOut()
-  outer_cv = LeaveOneGroupOut()
+  # How I used to have it, now causes error "ValueError: could not convert string to float: 'OraNano1'" 
+  # I wonder if that indicates that I am passing in variables differently now. I must be, since this used to work?
+  # I think a duplicate label column is being passed in as a predictor when before it was not
+  inner_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
+  outer_cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = 42)
+  #This is what lucinda has, and it leaves the dummy training forever:
+  #inner_cv = LeaveOneGroupOut()
+  #outer_cv = LeaveOneGroupOut()
   
   # scoring function
   scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
