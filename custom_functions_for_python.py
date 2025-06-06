@@ -26,8 +26,9 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
 from sklearn.metrics import matthews_corrcoef, f1_score, balanced_accuracy_score, classification_report, confusion_matrix, make_scorer
 from sklearn.inspection import permutation_importance
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 import joblib
-
 ################################################################################
 ############################# Custom Functions #################################
 ################################################################################
@@ -386,6 +387,7 @@ def applyNestedCrossValidation(rng, training_set, target_name, group_name, weigh
   print(f"Outer CV scores = {scores} \n")
   
   return outer_models, inner_models_halving, scores
+
 def fitFinalClassifier(inner_models_halving, filename_finalFittedModel, training_set, target_name, group_name, weight_name):
   """Runs a final hyperparameters tuning process after nested cross-validation and save the best candidate as final model"""
   # Split the training set into X_train, y_train and groups objects
@@ -475,11 +477,11 @@ def calibrateClassifier(fitted_final_classifier, validation_set, target_name, gr
 
 
 
-def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng):
+
+def buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng):
   """This function builds and save the plot of a learning curve to assess that the final model doesn't under/over-fit"""
   
   # Make sure the numbers given as argument are integer
-  lc_k = int(lc_k)
   cores = int(cores)
   n_sizes = int(n_sizes)
   
@@ -488,38 +490,51 @@ def buildLearningCurve(n_sizes, lc_k, cores, filename_learningCurve, fitted_fina
   
   # Set the training set sizes to try
   train_sizes = np.linspace(0.1, 1.0, num = n_sizes, endpoint = True)
-  
+  print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+  print(X_train)
+
   # Set the cross validation splitter
-  cv = LeaveOneGroupOut()
+  cv = StratifiedGroupKFold(n_splits=2, shuffle = True, random_state = rng)
   
   # scoring function
   scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
   
-  # Unlike for cross_validate, we don't need to enable metadata to be able to use the group argument for CV if needed so we can disable the metadata routing
-  sklearn.set_config(enable_metadata_routing=False)
+  print("Building and saving learning curve results... \n")
+  learning_start_time = time()
   
-  # Build the learning curve
-  display = LearningCurveDisplay.from_estimator(
-    fitted_final_classifier, # classifier with a fit method
-    X_train, # full training set
-    y_train, # target
+  train_sizes, train_scores, test_scores, fit_times, score_times = learning_curve(
+    estimator = fitted_final_classifier, # classifier with a fit method
+    X = X_train, # full training set
+    y = y_train, # target
     train_sizes = train_sizes, # list of training set sizes to try
     cv = cv, # the CV strategy
-    score_type = "both", # score both train and test scores to check under/overfitting
     scoring = scorer, # scoring method
-    score_name = "Matthews Correlation Coefficient", # name of the scoring method as it will appear on the plot
-    std_display_style = "errorbar", # display error bars
     n_jobs = cores, # number of cores to use
-    groups = groups#, # if the CV strategy uses groups
-    #sample_weight = sample_weights # if the CV strategy uses groups
+    verbose = 10, 
+    shuffle = True, # shuffling training data before taking prefixes of it based on train_sizes
+    random_state = rng, # random state for shuffling
+    error_score = 'raise', # raise error if error in scoring when fitting the estimator
+    return_times = True#,
+    #groups = groups#, # return scoring and fitting times
+    #params = {"sample_weight": sample_weights, "groups": groups} # metadata params passed to fit and the scorer
   )
   
-  # Make log axis and add title
-  _ = display.ax_.set(xscale = "log", title = "Learning curve of the final classifier")
+  results = pd.DataFrame({
+    'train_sizes': train_sizes,
+    'train_scores_mean': np.mean(train_scores, axis=1),
+    'train_scores_std': np.std(train_scores, axis=1),
+    'test_scores_mean': np.mean(test_scores, axis=1),
+    'test_scores_std': np.std(test_scores, axis=1),
+    'fit_times_mean' : np.mean(fit_times, axis=1),
+    'fit_times_std' : np.std(fit_times, axis=1),
+    'score_times_mean' : np.mean(score_times, axis=1),
+    'score_times_std' : np.std(score_times, axis=1)
+    })
   
-  # Save the plot
-  plt.savefig(filename_learningCurve)
-
+  results.to_csv(filename_learningCurve, index=False)
+  
+  learning_stop_time = time() - learning_start_time
+  print(f"Done ! Time elapsed : {learning_stop_time} s \n")
 
 def getFinalResults(fitted_final_classifier):
   """Function to print the main results of the process which are the selected features and the final classifier"""
@@ -539,7 +554,8 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
   
   # To be able to use groups and sample weights
   sklearn.set_config(enable_metadata_routing=True)
-  
+  print("training_set")
+  print(training_set)
   # Run the nested cross-validation step
   outer_models, inner_models_halving, scores = applyNestedCrossValidation(rng, training_set, target_name, group_name, weight_name, cores, select_K)
   
@@ -553,7 +569,7 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
   getFinalResults(fitted_final_classifier)
   
   # Build and save the learning curve
-  buildLearningCurve(n_sizes, 0, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
+  buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
   
   # Calibrate the classifier
   calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)

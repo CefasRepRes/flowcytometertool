@@ -19,7 +19,7 @@ dependencies:
       - requests==2.31.0
       - Pillow==9.4.0
       - statistics
-      - scikit-learn==1.5.2
+      - scikit-learn==1.6.1
       - pandas==2.2.0
       - numpy==1.26.3
       - matplotlib==3.8.3

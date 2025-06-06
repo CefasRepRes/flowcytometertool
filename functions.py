@@ -128,8 +128,8 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
         combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
         print('Cleaned group names to something consistent')
         print("Cleaned source labels:", list(set(combined_df['source_label'])))
-        print("Now dropping columns: ['consensus_label']")
-        combined_df = combined_df.drop(columns=['consensus_label'])
+        print("Now dropping columns: ['consensus_label','person']")
+        combined_df = combined_df.drop(columns=['consensus_label','person'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -438,11 +438,10 @@ def choose_zone_folders(output_path):
     zonechoice = simpledialog.askstring("Zone Choice", f"Choose a zone from: {', '.join(folders)}")
     return zonechoice
 
-from scipy.stats import mode
-import pandas as pd
-from collections import Counter
 
 def compute_consensual_labels_and_sample_weights(data):
+    from collections import Counter
+
     def get_weighted_mode(labels, weights):
         counter = Counter()
         for label, weight in zip(labels, weights):
@@ -450,12 +449,13 @@ def compute_consensual_labels_and_sample_weights(data):
         most_common_label, most_common_weight = counter.most_common(1)[0]
         return most_common_label, most_common_weight
 
-    # Group by id
+    # Group by 'id'
     grouped = data.groupby('id')
 
     # Initialize lists to store results
     consensus_labels = []
     sample_weights = []
+    ids = []
 
     for name, group in grouped:
         labels = group['source_label']
@@ -463,20 +463,23 @@ def compute_consensual_labels_and_sample_weights(data):
         consensus_label, consensus_weight = get_weighted_mode(labels, weights)
         total_weight = weights.sum()
         sample_weight = consensus_weight / total_weight
-        consensus_labels.append(consensus_label)
-        sample_weights.append(sample_weight)
+        if consensus_label != "Unassigned Particles":
+            ids.append(name)
+            consensus_labels.append(consensus_label)
+            sample_weights.append(sample_weight)
 
-    # Create a new DataFrame with the results
-    result_df = pd.DataFrame({
-        'id': grouped.groups.keys(),
+    # Create a DataFrame with consensus results
+    consensus_df = pd.DataFrame({
+        'id': ids,
         'consensus_label': consensus_labels,
-        'weight': sample_weights
+        'sample_weight': sample_weights
     })
 
-    # Remove unassigned particles
-    result_df = result_df[result_df['consensus_label'] != "Unassigned Particles"]
+    # Merge back into the original data
+    merged_df = data.merge(consensus_df, on='id', how='inner')
 
-    return result_df
+    return merged_df
+
 
 
 
@@ -622,14 +625,13 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
 def train_classifier(df, model_path):
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
-
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
     cores = 1 if is_frozen else os.cpu_count()
     
     # Split the data
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, stratify=cleaned_df["source_label"], random_state=42)
-
+    
     # Train on training set
     buildSupervisedClassifier(
         training_set=train_df,
