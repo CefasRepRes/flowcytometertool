@@ -369,7 +369,7 @@ def apply_python_model(listmode_file, predictions_file, model_path):
         print("Your data file has these columns:", df.columns.tolist())
         df = df[features]
         print("Predicting ...")
-        predictions = model.predict(df)
+        predictions = model.predict(df) # Also predict probability here with .predict_proba()
         df['predictions_data'] = predictions
         df.to_csv(predictions_file, index=False)
         log_message(f"Prediction Success: Predictions saved to {predictions_file}")
@@ -663,7 +663,7 @@ def train_classifier(df, plots_dir, model_path):
 
     # Evaluate on test set
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(test_df[features])
+    predictions = model.predict(test_df[features]) # Also predict probability here with .predict_proba()
     print("Test Set Evaluation:\n", classification_report(test_df["source_label"], predictions))
 
     # Confusion Matrix
@@ -691,7 +691,7 @@ def train_classifier(df, plots_dir, model_path):
 
 def test_model(df, model_path):
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(df[features])
+    predictions = model.predict(df[features]) # Also predict probability here with .predict_proba()
     df['predicted_label'] = predictions
     summary = df['predicted_label'].value_counts().to_string()
     return df, summary

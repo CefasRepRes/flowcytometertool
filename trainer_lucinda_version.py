@@ -329,7 +329,6 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
         tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self,self.df, self.plots_dir, self.model_path, nogui=False)).pack(pady=5)
         tk.Button(self.tab_download, text="Predict Test Set", command=self.handle_predict_test_set).pack(pady=5)
-        tk.Button(self.tab_download, text="Test Classifier", command=lambda: test_classifier(self.df, self.model_path, nogui=False)).pack(pady=5)
         self.build_expertise_matrix_editor(self.tab_download)
 
     def build_visualization_tab(self):
