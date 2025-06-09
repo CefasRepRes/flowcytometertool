@@ -49,7 +49,7 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
     "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier"]
 
-def train_model(df, plots_dir, model_path, nogui=False):
+def train_model(self,df, plots_dir, model_path, nogui=False):
     try:
         if df is None:
             if nogui:
@@ -59,6 +59,7 @@ def train_model(df, plots_dir, model_path, nogui=False):
                 messagebox.showerror("Error", "No data to train on.")
             return
         train_classifier(df, plots_dir, model_path)
+        self.build_plots_tab(notebook)         
         if nogui:
             print("Model training completed successfully.")
         else:
@@ -545,7 +546,7 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     return combined_df
 
 
-def plot_cv_results(cv_results):
+def plot_cv_results(cv_results,plots_dir):
     plotlist = []
     best_results = cv_results[cv_results['iter'] == cv_results['iter'].max()].groupby(['param_classifier', 'outer_splits']).apply(lambda x: x.loc[x['mean_test_score'].idxmax()])
 
@@ -681,7 +682,7 @@ def train_classifier(df, plots_dir, model_path):
     cv_results = pd.read_csv("cv_results.csv")
 
     try:
-        plot_cv_results(cv_results)
+        plot_cv_results(cv_results,plots_dir)
         plot_classifier_props(cv_results)
         plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir)
     except Exception as e:
