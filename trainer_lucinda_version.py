@@ -53,6 +53,23 @@ class UnifiedApp:
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
         self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
 
+    def build_plots_tab(self, notebook):
+        tab_plots = ttk.Frame(notebook)
+        notebook.add(tab_plots, text="Plots from Download & Train")
+        plots_dir = os.path.join(self.tool_dir, "plots")
+        if not os.path.exists(plots_dir):
+            Label(tab_plots, text="No plots found.").pack()
+            return
+        for filename in os.listdir(plots_dir):
+            if filename.endswith(".png"):
+                img_path = os.path.join(plots_dir, filename)
+                img = Image.open(img_path)
+                img = img.resize((600, 400), Image.LANCZOS)
+                img_tk = ImageTk.PhotoImage(img)
+                label = Label(tab_plots, image=img_tk)
+                label.image = img_tk  # Keep a reference!
+                label.pack(pady=10)
+
     def display_readme(self, parent_frame):
         try:
             if getattr(sys, 'frozen', False):
@@ -147,6 +164,7 @@ class UnifiedApp:
         self.tab_download = ttk.Frame(notebook)
         self.tab_visualize = ttk.Frame(notebook)
         notebook.add(self.tab_download, text="Download & Train")
+        self.build_plots_tab(notebook)         
         notebook.add(self.tab_visualize, text="Visualize & Label")
         self.build_download_tab()
         self.build_visualization_tab()
