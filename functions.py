@@ -588,25 +588,39 @@ def plot_classifier_props(cv_results):
 
     return plotlist
 
-def plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir):
+
+def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
+    os.makedirs(plots_dir, exist_ok=True)
     def plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters):
         def plot_hyperpar_combi(cv_results, classifier_name, x_axis, y_axis):
+            filtered_results = cv_results.copy()
             if x_axis == "degree" or y_axis == "degree":
-                cv_results = cv_results[cv_results['param_classifier__kernel'] == "poly"]
-            plt.figure(figsize=(12, 8))
-            sns.scatterplot(data=cv_results[cv_results['param_classifier'] == classifier_name], x=x_axis, y=y_axis, hue='mean_test_score', palette='viridis', size='mean_test_score', sizes=(20, 200))
-            plt.xscale('log') if x_axis in ["C", "gamma", "learning_rate"] else None
-            plt.yscale('log') if y_axis in ["C", "gamma", "learning_rate"] else None
-            plt.xlabel(x_axis.replace("_", " "))
-            plt.ylabel(y_axis.replace("_", " "))
-            plt.title(f"{classifier_name} - {x_axis} vs {y_axis}")
-            plt.legend(title="Mean MCC")
-            plt.tight_layout()
-            return plt
+                filtered_results = filtered_results[filtered_results['param_classifier__kernel'] == "poly"]
+            filtered_results = filtered_results[filtered_results['param_classifier'] == classifier_name]
+            fig, ax = plt.subplots(figsize=(12, 8))
+            scatter = sns.scatterplot(
+                data=filtered_results,
+                x=x_axis,
+                y=y_axis,
+                hue='mean_test_score',
+                palette='viridis',
+                size='mean_test_score',
+                sizes=(20, 200),
+                ax=ax
+            )
+            if x_axis in ["C", "gamma", "learning_rate"]:
+                ax.set_xscale('log')
+            if y_axis in ["C", "gamma", "learning_rate"]:
+                ax.set_yscale('log')
+            ax.set_xlabel(x_axis.replace("_", " "))
+            ax.set_ylabel(y_axis.replace("_", " "))
+            ax.set_title(f"{classifier_name} - {x_axis} vs {y_axis}")
+            ax.legend(title="Mean MCC")
+            fig.tight_layout()
+            return fig
         grid = [(x, y) for x in hyperparameters for y in hyperparameters if x != y]
         plot_list = [plot_hyperpar_combi(cv_results, classifier_name, x, y) for x, y in grid]
         return plot_list
-    
     logreg_hyperpars = ["param_classifier__C", "param_classifier__l1_ratio"]
     rf_hyperpars = ["param_classifier__max_features", "param_classifier__max_samples"]
     hgb_hyperpars = ["param_classifier__max_depth", "param_classifier__max_features", "param_classifier__learning_rate"]
@@ -618,10 +632,11 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir):
     for classifier_name, hyperparameters in classifiers_hyperpars.items():
         print(f"Plotting hyperparameter combinations for {classifier_name}")
         plot_list = plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters)
-        for i, plot in enumerate(plot_list):
-            plot.savefig(plots_dir+f'plots/plot_{i+1}.png')
-            plot.show()
-            plot.close()
+        for i, fig in enumerate(plot_list):
+            fig.savefig(os.path.join(plots_dir, f'{classifier_name}_plot_{i+1}.png'))
+            plt.close(fig)
+
+
 
 
 def train_classifier(df, plots_dir, model_path):
