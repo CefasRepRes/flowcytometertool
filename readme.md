@@ -40,7 +40,6 @@ VERSION="0.0.0.1"; git tag -a v$VERSION -m "Release version $VERSION"; git push 
 
 
 
-
 ## Tabs Overview
 
 ### 1: `Download & Train`
