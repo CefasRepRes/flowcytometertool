@@ -359,7 +359,7 @@ def to_listmode(json_file, listmode_file):
 
 def apply_python_model(listmode_file, predictions_file, model_path):
     try:
-        model, classes, features = loadClassifier(model_path, model_path)
+        model, classes, features = loadClassifier(model_path)
         df = pd.read_csv(listmode_file)
         df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
         df = df.dropna()
@@ -662,7 +662,7 @@ def train_classifier(df, plots_dir, model_path):
     )
 
     # Evaluate on test set
-    model, classes, features = loadClassifier(model_path, model_path)
+    model, classes, features = loadClassifier(model_path)
     predictions = model.predict(test_df[features])
     print("Test Set Evaluation:\n", classification_report(test_df["source_label"], predictions))
 
@@ -690,7 +690,7 @@ def train_classifier(df, plots_dir, model_path):
         print(f"Could not plot CV results: {e}")
 
 def test_model(df, model_path):
-    model, classes, features = loadClassifier(model_path, model_path)
+    model, classes, features = loadClassifier(model_path)
     predictions = model.predict(df[features])
     df['predicted_label'] = predictions
     summary = df['predicted_label'].value_counts().to_string()

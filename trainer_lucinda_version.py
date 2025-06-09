@@ -223,7 +223,6 @@ class UnifiedApp:
             from custom_functions_for_python import predictTestSet
             predictTestSet(
                 model_path=self.model_path,
-                classifier_name=self.model_path,
                 predict_name=predict_name,
                 data=self.df,
                 target_name="source_label",
