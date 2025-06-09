@@ -552,17 +552,11 @@ def plot_cv_results(cv_results):
     for outer in cv_results['outer_splits'].unique():
         outer_score = round(cv_results[cv_results['outer_splits'] == outer]['outer_split_test_score'].unique()[0], 3)
         best_params = best_results[best_results['outer_splits'] == outer][['param_classifier','param_classifier__learning_rate','param_classifier__max_depth','param_classifier__max_features','param_classifier__C','param_classifier__l1_ratio','param_classifier__max_samples']].values[0]
-        
-        plt.figure(figsize=(12, 8))
-        sns.lineplot(data=cv_results[cv_results['outer_splits'] == outer], x='iter', y='mean_test_score', hue='param_classifier', marker='o')
-        plt.title(f"Outer split {outer}")
-        plt.xlabel("Iteration")
-        plt.ylabel("MCC")
-        plt.xticks(rotation=45)
-        plt.legend(title="Classifier")
-        plt.figtext(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\nOuter CV test score : {outer_score}", wrap=True, horizontalalignment='center', fontsize=10)
-        plt.tight_layout()
-        plotlist.append(plt)
+        fig, ax = plt.subplots(figsize=(12, 8))
+        sns.lineplot(data=cv_results[cv_results['outer_splits'] == outer], x='iter', y='mean_test_score', hue='param_classifier', marker='o', ax=ax)
+        ax.set_title(f"Outer split {outer}"); ax.set_xlabel("Iteration"); ax.set_ylabel("MCC"); ax.tick_params(axis='x', rotation=45); ax.legend(title="Classifier")
+        fig.text(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\\nOuter CV test score : {outer_score}", wrap=True, horizontalalignment='center', fontsize=10)
+        fig.tight_layout(); fig.savefig(os.path.join(plots_dir, f'cv_results_outer_{outer}.png')); plt.close(fig); plotlist.append(fig)
 
     return plotlist
 
