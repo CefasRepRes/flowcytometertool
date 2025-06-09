@@ -21,6 +21,9 @@ import functions
 from tkinter.scrolledtext import ScrolledText
 from PIL import Image, ImageTk
 from functions import *
+import threading
+import time
+from PIL import Image, ImageTk
 #import multiprocessing
 
 class UnifiedApp:
@@ -34,7 +37,7 @@ class UnifiedApp:
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         model_dir = os.path.join(self.tool_dir, "models")
-        self.plots_dir = os.path.join(self.tool_dir, "plots")
+        self.plots_dir = os.path.join(self.tool_dir, "Training plots")
         os.makedirs(self.plots_dir, exist_ok=True)
         os.makedirs(model_dir, exist_ok=True)
         self.model_path = os.path.join(model_dir, "final_model.pkl")
@@ -54,59 +57,56 @@ class UnifiedApp:
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
         self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
 
-
-    import os
-    import time
-    import threading
-    from IPython.display import display, clear_output
-    import ipywidgets as widgets
-
     def build_plots_tab(self, notebook):
-        plots_dir = os.path.join(self.tool_dir, "plots")
-        output = widgets.Output()
-        tab = widgets.Tab(children=[output])
-        tab.set_title(0, "Plots")
+        self.tab_plots = ttk.Frame(notebook)
+        notebook.add(self.tab_plots, text="Plots")
+
+        # Frame for list and image
+        frame = tk.Frame(self.tab_plots)
+        frame.pack(fill='both', expand=True)
+
+        # Listbox for file names
+        self.plot_listbox = tk.Listbox(frame, width=50)
+        self.plot_listbox.pack(side='left', fill='y', padx=10, pady=10)
+
+        # Canvas for image preview
+        self.image_label = tk.Label(frame)
+        self.image_label.pack(side='right', fill='both', expand=True, padx=10, pady=10)
+
         def list_plot_files():
-            return [f for f in os.listdir(plots_dir) if os.path.isfile(os.path.join(plots_dir, f))]
-        def update_display():
-            with output:
-                clear_output(wait=True)
-                files = list_plot_files()
-                if not files:
-                    print("No plots found.")
-                else:
-                    for file in files:
-                        print(file)
-        def watch_directory():
+            return [f for f in os.listdir(self.plots_dir) if f.lower().endswith('.png')]
+
+        def update_plot_list():
+            current_files = list_plot_files()
+            self.plot_listbox.delete(0, tk.END)
+            for file in current_files:
+                self.plot_listbox.insert(tk.END, file)
+
+        def show_selected_image(event):
+            selection = self.plot_listbox.curselection()
+            if selection:
+                filename = self.plot_listbox.get(selection[0])
+                image_path = os.path.join(self.plots_dir, filename)
+                try:
+                    image = Image.open(image_path)
+                    image.thumbnail((800, 800))  # Resize for display
+                    self.tk_image = ImageTk.PhotoImage(image)
+                    self.image_label.config(image=self.tk_image)
+                except Exception as e:
+                    messagebox.showerror("Image Error", f"Failed to load image:\n{e}")
+
+        def watch_plots_folder():
             previous_files = set()
             while True:
                 current_files = set(list_plot_files())
                 if current_files != previous_files:
-                    update_display()
+                    update_plot_list()
                     previous_files = current_files
-                time.sleep(2)  # Check every 2 seconds
-        # Start the watcher in a background thread
-        thread = threading.Thread(target=watch_directory, daemon=True)
-        thread.start()
-        display(tab)
+                time.sleep(2)
 
+        self.plot_listbox.bind("<<ListboxSelect>>", show_selected_image)
+        threading.Thread(target=watch_plots_folder, daemon=True).start()
 
-    def build_plots_tab(self, notebook):
-        tab_plots = ttk.Frame(notebook)
-        notebook.add(tab_plots, text="Plots from Download & Train")
-        plots_dir = os.path.join(self.tool_dir, "plots")
-        if not os.path.exists(plots_dir):
-            tk.Label(tab_plots, text="No plots found.").pack()
-            return
-        for filename in os.listdir(plots_dir):
-            if filename.endswith(".png"):
-                img_path = os.path.join(plots_dir, filename)
-                img = Image.open(img_path)
-                img = img.resize((600, 400), Image.LANCZOS)
-                img_tk = ImageTk.PhotoImage(img)
-                label = tk.Label(tab_plots, image=img_tk)
-                label.image = img_tk  # Keep a reference!
-                label.pack(pady=10)
 
     def display_readme(self, parent_frame):
         try:
@@ -202,6 +202,7 @@ class UnifiedApp:
         self.tab_download = ttk.Frame(notebook)
         self.tab_visualize = ttk.Frame(notebook)
         notebook.add(self.tab_download, text="Download & Train")
+        self.build_plots_tab(notebook)         
         notebook.add(self.tab_visualize, text="Visualize & Label")
         self.build_download_tab()
         self.build_visualization_tab()
@@ -209,7 +210,6 @@ class UnifiedApp:
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
         self.build_local_watcher_tab()
-        self.build_plots_tab(notebook)         
 
     def redirect_stdout_to_gui(self):
         self.log_output = ScrolledText(self.root, height=10, state='disabled')
