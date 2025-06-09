@@ -653,8 +653,8 @@ def train_classifier(df, plots_dir, model_path):
         select_K=5,
         cores=cores,
         n_sizes=4,
-        filename_cvResults="cv_results.csv",
-        filename_learningCurve="learning_curve.csv",
+        filename_cvResults=os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"),
+        filename_learningCurve=os.path.join(os.path.dirname(model_path),"learning_curve" + os.path.basename(model_path) + ".csv"),
         filename_finalFittedModel=model_path,
         filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
         validation_set = test_df       
@@ -679,7 +679,7 @@ def train_classifier(df, plots_dir, model_path):
     plt.show()
     
     
-    cv_results = pd.read_csv("cv_results.csv")
+    cv_results = pd.read_csv(os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"))
 
     try:
         plot_cv_results(cv_results,plots_dir)
