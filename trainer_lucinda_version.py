@@ -60,16 +60,10 @@ class UnifiedApp:
     def build_plots_tab(self, notebook):
         self.tab_plots = ttk.Frame(notebook)
         notebook.add(self.tab_plots, text="Plots")
-
-        # Frame for list and image
         frame = tk.Frame(self.tab_plots)
         frame.pack(fill='both', expand=True)
-
-        # Listbox for file names
         self.plot_listbox = tk.Listbox(frame, width=50)
         self.plot_listbox.pack(side='left', fill='y', padx=10, pady=10)
-
-        # Canvas for image preview
         self.image_label = tk.Label(frame)
         self.image_label.pack(side='right', fill='both', expand=True, padx=10, pady=10)
 
@@ -259,7 +253,7 @@ class UnifiedApp:
             report_filename = os.path.join(self.tool_dir, "classification_report.csv")
             text_file = open(os.path.join(self.tool_dir, "prediction_log.txt"), "w")
             from custom_functions_for_python import predictTestSet
-            predictTestSet(
+            predictTestSet(self,
                 model_path=self.model_path,
                 predict_name=predict_name,
                 data=self.df,
@@ -276,10 +270,7 @@ class UnifiedApp:
 
 
     def build_expertise_matrix_editor(self, parent_frame):
-        # Label
         tk.Label(parent_frame, text="Edit expertise levels assigned to your dataset (optional):").pack(pady=(20, 5))
-
-        # Treeview Frame
         tree_frame = tk.Frame(parent_frame)
         tree_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
