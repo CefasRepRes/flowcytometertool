@@ -517,7 +517,7 @@ def buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_clas
     shuffle = True, # shuffling training data before taking prefixes of it based on train_sizes
     random_state = rng, # random state for shuffling
     error_score = 'raise', # raise error if error in scoring when fitting the estimator
-    return_times = True#,
+    return_times = True,
     #groups = groups, # return scoring and fitting times
     #params = {"sample_weight": sample_weights, "groups": groups} # metadata params passed to fit and the scorer
   )
@@ -654,7 +654,7 @@ def comparePrediction(data, preds_test, target_name, weight_name, cm_filename, m
   # Save confusion matrix as csv
   cm.to_csv(cm_filename)
 
-
+# Not implemented
 def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name, cm_filename):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
   preds_test = predictPhyto(model_path, classifier_name, predict_name, data)
