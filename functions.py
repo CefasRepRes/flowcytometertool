@@ -60,7 +60,6 @@ def train_model(self,df, plots_dir, model_path, nogui=False):
             return
         train_classifier(df, plots_dir, model_path)
         notebook = ttk.Notebook(self.root)
-        self.build_plots_tab(notebook)         
         if nogui:
             print("Model training completed successfully.")
         else:

@@ -54,6 +54,43 @@ class UnifiedApp:
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
         self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
 
+
+    import os
+    import time
+    import threading
+    from IPython.display import display, clear_output
+    import ipywidgets as widgets
+
+    def build_plots_tab(self, notebook):
+        plots_dir = os.path.join(self.tool_dir, "plots")
+        output = widgets.Output()
+        tab = widgets.Tab(children=[output])
+        tab.set_title(0, "Plots")
+        def list_plot_files():
+            return [f for f in os.listdir(plots_dir) if os.path.isfile(os.path.join(plots_dir, f))]
+        def update_display():
+            with output:
+                clear_output(wait=True)
+                files = list_plot_files()
+                if not files:
+                    print("No plots found.")
+                else:
+                    for file in files:
+                        print(file)
+        def watch_directory():
+            previous_files = set()
+            while True:
+                current_files = set(list_plot_files())
+                if current_files != previous_files:
+                    update_display()
+                    previous_files = current_files
+                time.sleep(2)  # Check every 2 seconds
+        # Start the watcher in a background thread
+        thread = threading.Thread(target=watch_directory, daemon=True)
+        thread.start()
+        display(tab)
+
+
     def build_plots_tab(self, notebook):
         tab_plots = ttk.Frame(notebook)
         notebook.add(tab_plots, text="Plots from Download & Train")
@@ -172,6 +209,7 @@ class UnifiedApp:
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
         self.build_local_watcher_tab()
+        self.build_plots_tab(notebook)         
 
     def redirect_stdout_to_gui(self):
         self.log_output = ScrolledText(self.root, height=10, state='disabled')
