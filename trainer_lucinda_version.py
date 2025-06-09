@@ -503,7 +503,7 @@ class UnifiedApp:
             variables = self.df.columns.tolist()
             self.x_variable_combobox['values'] = variables
             self.y_variable_combobox['values'] = variables
-            self.color_variable_combobox['values'] = color_options if color_options else variables
+            self.color_variable_combobox['values'] = color_options if color_options else [col for col in self.df.columns if self.df[col].nunique() <= 50]
             if 'FWS_total' in variables and 'FWS_maximum' in variables:
                 self.x_variable_combobox.set('FWS_total')
                 self.y_variable_combobox.set('FWS_maximum')

@@ -652,7 +652,7 @@ def train_classifier(df, plots_dir, model_path):
         weight_name="weight",
         select_K=5,
         cores=cores,
-        n_sizes=2,
+        n_sizes=4,
         filename_cvResults="cv_results.csv",
         filename_learningCurve="learning_curve.png",
         filename_finalFittedModel=model_path,
