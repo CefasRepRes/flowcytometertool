@@ -580,11 +580,11 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
 
 ########################## Apply Supervised Classifier #########################
 
-def loadClassifier(model_path, classifier_name):
+def loadClassifier(model_path):
   """Function to load the saved final supervised classifier and everything needed for prediction"""
   
   # Load the model
-  fitted_final_classifier = joblib.load(classifier_name)
+  fitted_final_classifier = joblib.load(model_path)
   
   # Get unique class names
   classes = fitted_final_classifier['classifier'].classes_
@@ -594,11 +594,11 @@ def loadClassifier(model_path, classifier_name):
   return fitted_final_classifier, classes, features
 
 
-def predictPhyto(model_path, classifier_name, predict_name, data):
+def predictPhyto(model_path, predict_name, data):
   """Function to predict phytoplankton class from a supervised classifier"""
   
   # Load classifier, unique class names and the features used in the pipeline (before feature selection)
-  fitted_final_classifier, classes, features = loadClassifier(model_path, classifier_name)
+  fitted_final_classifier, classes, features = loadClassifier(model_path)
   
   # Only keep the features used to fit the final model in the table to be predicted
   X = data[features]
@@ -623,11 +623,11 @@ def predictPhyto(model_path, classifier_name, predict_name, data):
   return preds_test
 
 
-def comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path, classifier_name):
+def comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path):
   """Function to assess the generalization performance of the final model by comparing its predicted label of the test set to the manual labels"""
   
   # Load Classifier to get the class names
-  fitted_final_classifier, classes, features = loadClassifier(model_path, classifier_name)
+  fitted_final_classifier, classes, features = loadClassifier(model_path)
   
   # Get the manual labels
   y_test = data[target_name]
@@ -655,16 +655,16 @@ def comparePrediction(data, preds_test, target_name, weight_name, report_filenam
   cm.to_csv(cm_filename)
 
 # Not implemented
-def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
+def predictTestSet(model_path, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
-  preds_test = predictPhyto(model_path, classifier_name, predict_name, data)
-  #comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, classifier_name)
+  preds_test = predictPhyto(model_path, predict_name, data)
+  comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path)
 
-def getPermutationImportance(data, nb_repeats, classifier_name, target_name, weight_name, cores, filename_importance):
+def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance):
   """Function to measure the permutation importance of the variables used in the final model"""
   
   # Load the model
-  fitted_final_classifier, classes, features = loadClassifier(model_path, classifier_name)
+  fitted_final_classifier, classes, features = loadClassifier(model_path)
   
   # Get the manual labels and the features table
   y = data[target_name]
@@ -693,11 +693,11 @@ def getPermutationImportance(data, nb_repeats, classifier_name, target_name, wei
   print("Permutation Importance results saved ! \n")
 
 
-def getSelectedFeatures(model_path, classifier_name):
+def getSelectedFeatures(model_path):
   """Function to extract the features selected with the feature selector of the pipeline"""
   
   # Load model
-  fitted_final_classifier = joblib.load(classifier_name)
+  fitted_final_classifier = joblib.load(model_path)
   
   # Get the features
   selected_features = fitted_final_classifier['selector'].get_feature_names_out()
