@@ -19,6 +19,7 @@ import tempfile
 from custom_functions_for_python import buildSupervisedClassifier, loadClassifier
 import functions
 from tkinter.scrolledtext import ScrolledText
+from PIL import Image, ImageTk
 from functions import *
 #import multiprocessing
 
@@ -58,7 +59,7 @@ class UnifiedApp:
         notebook.add(tab_plots, text="Plots from Download & Train")
         plots_dir = os.path.join(self.tool_dir, "plots")
         if not os.path.exists(plots_dir):
-            Label(tab_plots, text="No plots found.").pack()
+            tk.Label(tab_plots, text="No plots found.").pack()
             return
         for filename in os.listdir(plots_dir):
             if filename.endswith(".png"):
@@ -66,7 +67,7 @@ class UnifiedApp:
                 img = Image.open(img_path)
                 img = img.resize((600, 400), Image.LANCZOS)
                 img_tk = ImageTk.PhotoImage(img)
-                label = Label(tab_plots, image=img_tk)
+                label = tk.Label(tab_plots, image=img_tk)
                 label.image = img_tk  # Keep a reference!
                 label.pack(pady=10)
 
@@ -210,6 +211,32 @@ class UnifiedApp:
     def handle_combine_csvs(self):
         self.df = combine_csvs(self.output_path, "expertise_matrix.csv", nogui=False)
 
+    def handle_predict_test_set(self):
+        if self.df is None:
+            messagebox.showerror("Error", "No dataset loaded. Please load or combine CSVs first.")
+            return
+        try:
+            predict_name = os.path.join(self.tool_dir, "test_predictions.csv")
+            cm_filename = os.path.join(self.tool_dir, "confusion_matrix.csv")
+            report_filename = os.path.join(self.tool_dir, "classification_report.csv")
+            text_file = open(os.path.join(self.tool_dir, "prediction_log.txt"), "w")
+            from custom_functions_for_python import predictTestSet
+            predictTestSet(
+                model_path=self.model_path,
+                classifier_name=self.model_path,
+                predict_name=predict_name,
+                data=self.df,
+                target_name="source_label",
+                weight_name="weight",
+                cm_filename=cm_filename,
+                report_filename=report_filename,
+                text_file=text_file
+            )
+            text_file.close()
+            messagebox.showinfo("Success", "Test set predictions completed and saved.")
+        except Exception as e:
+            messagebox.showerror("Prediction Error", f"Failed to predict test set:\n{e}")
+
 
     def build_expertise_matrix_editor(self, parent_frame):
         # Label
@@ -302,6 +329,7 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
         tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self,self.df, self.plots_dir, self.model_path, nogui=False)).pack(pady=5)
+        tk.Button(self.tab_download, text="Predict Test Set", command=self.handle_predict_test_set).pack(pady=5)
         tk.Button(self.tab_download, text="Test Classifier", command=lambda: test_classifier(self.df, self.model_path, nogui=False)).pack(pady=5)
         self.build_expertise_matrix_editor(self.tab_download)
 

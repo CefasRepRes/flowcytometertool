@@ -655,7 +655,7 @@ def comparePrediction(data, preds_test, target_name, weight_name, cm_filename, m
   cm.to_csv(cm_filename)
 
 # Not implemented
-def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name, cm_filename):
+def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
   preds_test = predictPhyto(model_path, classifier_name, predict_name, data)
   comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, classifier_name, text_file)
