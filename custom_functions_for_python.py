@@ -623,7 +623,7 @@ def predictPhyto(model_path, classifier_name, predict_name, data):
   return preds_test
 
 
-def comparePrediction(data, preds_test, target_name, weight_name, cm_filename, model_path, classifier_name):
+def comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path, classifier_name):
   """Function to assess the generalization performance of the final model by comparing its predicted label of the test set to the manual labels"""
   
   # Load Classifier to get the class names
@@ -658,8 +658,7 @@ def comparePrediction(data, preds_test, target_name, weight_name, cm_filename, m
 def predictTestSet(model_path, classifier_name, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
   preds_test = predictPhyto(model_path, classifier_name, predict_name, data)
-  comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, classifier_name, text_file)
-
+  #comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, classifier_name)
 
 def getPermutationImportance(data, nb_repeats, classifier_name, target_name, weight_name, cores, filename_importance):
   """Function to measure the permutation importance of the variables used in the final model"""
