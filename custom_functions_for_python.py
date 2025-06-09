@@ -637,7 +637,7 @@ def comparePrediction(data, preds_test, target_name, weight_name, report_filenam
   # Print the results of various metrics scores between manual and predicted labels
   print(f"Test Matthews Correlation Coefficient score = {matthews_corrcoef(y_test, preds_test)} \n")
   print(f"Test Balanced Accuracy score = {balanced_accuracy_score(y_test, preds_test)} \n")
-  print(f"Classification report : \n {classification_report(y_test, preds_test, sample_weight = sample_weights)} \n", file=file)
+  print(f"Classification report : \n {classification_report(y_test, preds_test, sample_weight = sample_weights)} \n")
 
   report = pd.DataFrame(classification_report(y_test, preds_test, output_dict=True, sample_weight = sample_weights))
   report['metric'] = ('precision', 'recall', 'f1-score', 'support')
