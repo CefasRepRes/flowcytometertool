@@ -378,7 +378,7 @@ def apply_python_model(listmode_file, predictions_file, model_path):
         # Bind both data frames by column
         full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
         # Save final predicted table
-        full_predicted.to_csv(predict_name)        
+        full_predicted.to_csv(predictions_file)        
         log_message(f"Prediction Success: Predictions saved to {predictions_file}")
     except Exception as e:
         log_message(f"Prediction Error: Failed to apply Python model: {e}")
