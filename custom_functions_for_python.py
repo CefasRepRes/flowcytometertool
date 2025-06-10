@@ -620,7 +620,7 @@ def predictPhyto(model_path, predict_name, data):
   
   # Save final predicted table
   full_predicted.to_csv(predict_name)
-  return preds_test
+  return preds_test, full_predicted
 
 
 def comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path):
@@ -657,8 +657,8 @@ def comparePrediction(data, preds_test, target_name, weight_name, report_filenam
 # Not implemented
 def predictTestSet(self,model_path, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
   """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
-  self.df = predictPhyto(model_path, predict_name, data)
-  comparePrediction(data, self.df, target_name, weight_name, report_filename, cm_filename, model_path)
+  preds_test, self.df = predictPhyto(model_path, predict_name, data)
+  comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path)
 
 def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance):
   """Function to measure the permutation importance of the variables used in the final model"""
