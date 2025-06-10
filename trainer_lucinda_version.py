@@ -265,8 +265,8 @@ class UnifiedApp:
             )
             text_file.close()
             self.refresh_comboboxes()
-            self.update_plot()
-            self.update_summary_table()
+            #self.update_plot()
+            #self.update_summary_table()
             messagebox.showinfo("Success", "Test set predictions completed and saved.")
         except Exception as e:
             messagebox.showerror("Prediction Error", f"Failed to predict test set:\n{e}")
