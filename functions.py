@@ -129,8 +129,8 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
         combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
         print('Cleaned group names to something consistent')
         print("Cleaned source labels:", list(set(combined_df['source_label'])))
-        print("Now dropping columns: ['consensus_label','person']")
-        combined_df = combined_df.drop(columns=['consensus_label','person'])
+        print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
+        combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
