@@ -362,18 +362,27 @@ def apply_python_model(listmode_file, predictions_file, model_path):
         df = pd.read_csv(listmode_file)
         df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
         df = df.dropna()
-
         # Ensure only required features are used
         print("Your model expects these columns:", features)
         print("Your data file has these columns:", df.columns.tolist())
         df = df[features]
         print("Predicting ...")
-        predictions = model.predict(df) # Also predict probability here with .predict_proba()
-        df['predictions_data'] = predictions
-        df.to_csv(predictions_file, index=False)
+        # Classify data, predict the labels and probabilities
+        predictions = fitted_final_classifier.predict(df)
+        proba_predict = pd.DataFrame(fitted_final_classifier.predict_proba(df)) # compute class prediction probabilities and store in data frame
+        predicted_data = df
+        # Add prediction to original test table
+        predicted_data['predicted_label'] = predictions 
+        # Make the column names of this data frame the class names (instead of numbers)
+        proba_predict = proba_predict.set_axis(classes, axis=1)
+        # Bind both data frames by column
+        full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+        # Save final predicted table
+        full_predicted.to_csv(predict_name)        
         log_message(f"Prediction Success: Predictions saved to {predictions_file}")
     except Exception as e:
         log_message(f"Prediction Error: Failed to apply Python model: {e}")
+
 
 
 
@@ -663,7 +672,17 @@ def train_classifier(df, plots_dir, model_path):
 
     # Evaluate on test set
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(test_df[features]) # Also predict probability here with .predict_proba()
+    predictions = model.predict(df)
+    proba_predict = pd.DataFrame(model.predict_proba(df)) # compute class prediction probabilities and store in data frame
+    predicted_data = df
+    # Add prediction to original test table
+    predicted_data['predicted_label'] = predictions 
+    # Make the column names of this data frame the class names (instead of numbers)
+    proba_predict = proba_predict.set_axis(classes, axis=1)
+    # Bind both data frames by column
+    full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+    # Save final predicted table
+    #full_predicted.to_csv(predict_name)        
     print("Test Set Evaluation:\n", classification_report(test_df["source_label"], predictions))
 
     # Confusion Matrix
@@ -691,7 +710,17 @@ def train_classifier(df, plots_dir, model_path):
 
 def test_model(df, model_path):
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(df[features]) # Also predict probability here with .predict_proba()
+    predictions = model.predict(df)
+    proba_predict = pd.DataFrame(model.predict_proba(df)) # compute class prediction probabilities and store in data frame
+    predicted_data = df
+    # Add prediction to original test table
+    predicted_data['predicted_label'] = predictions 
+    # Make the column names of this data frame the class names (instead of numbers)
+    proba_predict = proba_predict.set_axis(classes, axis=1)
+    # Bind both data frames by column
+    full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+    # Save final predicted table
+    #full_predicted.to_csv(predict_name) 
     df['predicted_label'] = predictions
     summary = df['predicted_label'].value_counts().to_string()
     return df, summary
