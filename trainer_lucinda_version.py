@@ -264,6 +264,9 @@ class UnifiedApp:
                 text_file=text_file
             )
             text_file.close()
+            self.refresh_comboboxes()
+            self.update_plot()
+            self.update_summary_table()
             messagebox.showinfo("Success", "Test set predictions completed and saved.")
         except Exception as e:
             messagebox.showerror("Prediction Error", f"Failed to predict test set:\n{e}")
@@ -502,8 +505,8 @@ class UnifiedApp:
                 self.x_variable_combobox.set(variables[0])
                 self.y_variable_combobox.set(variables[1])
             self.color_variable_combobox.set('label' if 'label' in self.df.columns else (color_options[0] if color_options else variables[0]))  # Default color variable
-            update_plot()
-            update_summary_table()
+            self.update_plot()
+            self.update_summary_table()
 
 
     def load_json(self):
