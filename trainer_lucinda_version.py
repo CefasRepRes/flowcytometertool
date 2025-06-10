@@ -470,11 +470,27 @@ class UnifiedApp:
 
     def refresh_comboboxes(self):
         if self.df is not None:
-            columns = list(self.df.columns)
-            self.x_variable_combobox['values'] = columns
-            self.y_variable_combobox['values'] = columns
-            self.color_variable_combobox['values'] = columns
-
+            variables = list(self.df.columns)
+            color_options = []
+            if 'label' in self.df.columns:
+                color_options.append('label')
+            if 'predictions_data' in self.df.columns:
+                color_options.append('predictions_data')
+            if 'agreement' in self.df.columns:
+                color_options.append('agreement')
+            if not color_options:
+                color_options = [col for col in self.df.columns if self.df[col].nunique() <= 50]
+            self.x_variable_combobox['values'] = variables
+            self.y_variable_combobox['values'] = variables
+            self.color_variable_combobox['values'] = color_options
+            if 'FWS_total' in variables and 'FWS_maximum' in variables:
+                self.x_variable_combobox.set('FWS_total')
+                self.y_variable_combobox.set('FWS_maximum')
+            else:
+                self.x_variable_combobox.set(variables[0])
+                self.y_variable_combobox.set(variables[1] if len(variables) > 1 else variables[0])
+            default_color = 'label' if 'label' in self.df.columns else (color_options[0] if color_options else variables[0])
+            self.color_variable_combobox.set(default_color)
 
 
     def load_csv(self):
