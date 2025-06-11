@@ -49,7 +49,7 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
     "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier"]
 
-def train_model(self,df, plots_dir, model_path, nogui=False):
+def train_model(df, plots_dir, model_path, nogui=False, self = None):
     try:
         if df is None:
             if nogui:
@@ -59,12 +59,12 @@ def train_model(self,df, plots_dir, model_path, nogui=False):
                 messagebox.showerror("Error", "No data to train on.")
             return
         train_classifier(df, plots_dir, model_path)
-        notebook = ttk.Notebook(self.root)
         if nogui:
             print("Model training completed successfully.")
         else:
             from tkinter import messagebox
             messagebox.showinfo("Training Complete", "Model training completed successfully.")
+            notebook = ttk.Notebook(self.root)
     except Exception as e:
         if nogui:
             print(f"Training Error: Failed to train model: {e}")
@@ -1044,7 +1044,7 @@ def run_backend_only():
 
         # 6. Train Model
         print("🤖 Training model...")
-        train_model(df, plots_dir, model_path, nogui=True)
+        train_model(df, plots_dir, model_path, nogui=True, self = None)
 
         # 7. Test Classifier
         print("🧪 Testing classifier...")
