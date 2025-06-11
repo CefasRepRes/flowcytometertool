@@ -19,38 +19,88 @@ import tempfile
 from custom_functions_for_python import buildSupervisedClassifier, loadClassifier
 import functions
 from tkinter.scrolledtext import ScrolledText
+from PIL import Image, ImageTk
 from functions import *
+import threading
+import time
+from PIL import Image, ImageTk
 #import multiprocessing
 
 class UnifiedApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Flow Cytometry Tools")
-        self.root.geometry("1200x800")
-        self.temp_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
-        self.download_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/downloadeddata/')
-        self.output_path = os.path.join(os.getenv('APPDATA'), 'blobfileloader/extraction/')
+        self.root.geometry("1800x1000")
+        self.tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
+        self.download_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
+        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'extraction/')
         os.makedirs(self.download_path, exist_ok=True)
-        self.cyz2json_dir = os.path.join(self.temp_dir, "cyz2json")
-        model_dir = os.path.join(self.temp_dir, "models")
+        self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
+        model_dir = os.path.join(self.tool_dir, "models")
+        self.plots_dir = os.path.join(self.tool_dir, "Training plots")
+        os.makedirs(self.plots_dir, exist_ok=True)
         os.makedirs(model_dir, exist_ok=True)
         self.model_path = os.path.join(model_dir, "final_model.pkl")
         self.df = None
         self.pumped_volume = 1
         self.selector = None
         self.polygons = []
-        self.predictions_datas = []
+        self.predicted_labels = []
         self.current_polygon = None
-        self.current_predictions_data = None
+        self.current_predicted_label = None
         self.dest_path = None
-        self.install_dir = os.path.join(os.getenv('APPDATA'), 'blobfileloader')
         self.create_widgets()
         self.path_entry = tk.Entry(self.tab_download, width=100)
         self.path_entry.insert(0, self.cyz2json_dir + "\\Cyz2Json.dll")
-        self.cyz_file = os.path.join(self.temp_dir, "tempfile.cyz")
-        self.json_file = os.path.join(self.temp_dir, "tempfile.json")
-        self.listmode_file = os.path.join(self.temp_dir, "tempfile.csv")
-        self.model_path = os.path.join(self.temp_dir, "models/final_model.pkl")
+        self.cyz_file = os.path.join(self.tool_dir, "tempfile.cyz")
+        self.json_file = os.path.join(self.tool_dir, "tempfile.json")
+        self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
+        self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
+
+    def build_plots_tab(self, notebook):
+        self.tab_plots = ttk.Frame(notebook)
+        notebook.add(self.tab_plots, text="Plots")
+        frame = tk.Frame(self.tab_plots)
+        frame.pack(fill='both', expand=True)
+        self.plot_listbox = tk.Listbox(frame, width=50)
+        self.plot_listbox.pack(side='left', fill='y', padx=10, pady=10)
+        self.image_label = tk.Label(frame)
+        self.image_label.pack(side='right', fill='both', expand=True, padx=10, pady=10)
+
+        def list_plot_files():
+            return [f for f in os.listdir(self.plots_dir) if f.lower().endswith('.png')]
+
+        def update_plot_list():
+            current_files = list_plot_files()
+            self.plot_listbox.delete(0, tk.END)
+            for file in current_files:
+                self.plot_listbox.insert(tk.END, file)
+
+        def show_selected_image(event):
+            selection = self.plot_listbox.curselection()
+            if selection:
+                filename = self.plot_listbox.get(selection[0])
+                image_path = os.path.join(self.plots_dir, filename)
+                try:
+                    image = Image.open(image_path)
+                    image.thumbnail((800, 800))  # Resize for display
+                    self.tk_image = ImageTk.PhotoImage(image)
+                    self.image_label.config(image=self.tk_image)
+                except Exception as e:
+                    messagebox.showerror("Image Error", f"Failed to load image:\n{e}")
+
+        def watch_plots_folder():
+            previous_files = set()
+            while True:
+                current_files = set(list_plot_files())
+                if current_files != previous_files:
+                    update_plot_list()
+                    previous_files = current_files
+                time.sleep(2)
+
+        self.plot_listbox.bind("<<ListboxSelect>>", show_selected_image)
+        threading.Thread(target=watch_plots_folder, daemon=True).start()
+
 
     def display_readme(self, parent_frame):
         try:
@@ -123,9 +173,9 @@ class UnifiedApp:
 
     def install_all_requirements(self):
         self.root.update()
-        if not os.path.exists(self.install_dir):
-            os.makedirs(self.install_dir)
-        self.cyz2json_dir = os.path.join(self.install_dir, "cyz2json")
+        if not os.path.exists(self.tool_dir):
+            os.makedirs(self.tool_dir)
+        self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         self.path_entry.delete(0, tk.END)
         self.path_entry.insert(0, os.path.join(self.cyz2json_dir, "bin", "Cyz2Json.dll"))
         try:
@@ -136,6 +186,8 @@ class UnifiedApp:
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
 
     def create_widgets(self):
+        #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
+        tk.Label(self.root, text=f"Working Directory: {self.tool_dir}", fg="gray").pack(pady=(10, 0))
         notebook = ttk.Notebook(self.root)
         notebook.pack(expand=True, fill='both')
         self.tab_readme = ttk.Frame(notebook)
@@ -144,13 +196,37 @@ class UnifiedApp:
         self.tab_download = ttk.Frame(notebook)
         self.tab_visualize = ttk.Frame(notebook)
         notebook.add(self.tab_download, text="Download & Train")
+        self.build_plots_tab(notebook)         
         notebook.add(self.tab_visualize, text="Visualize & Label")
         self.build_download_tab()
         self.build_visualization_tab()
         self.build_blob_tools_tab()
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
-        self.build_local_watcher_tab()        
+        self.build_local_watcher_tab()
+
+    def redirect_stdout_to_gui(self):
+        self.log_output = ScrolledText(self.root, height=10, state='disabled')
+        self.log_output.pack(fill='both', padx=10, pady=5)
+
+        class StdoutRedirector:
+            def __init__(inner_self, widget):
+                inner_self.widget = widget
+
+            def write(inner_self, message):
+                inner_self.widget.configure(state='normal')
+                inner_self.widget.insert('end', message)
+                inner_self.widget.configure(state='disabled')
+                inner_self.widget.see('end')
+
+            def flush(inner_self):
+                pass
+
+        sys.stdout = StdoutRedirector(self.log_output)
+        sys.stderr = StdoutRedirector(self.log_output)
+
+        
+        
 
     def generate_mixfile(self):
         try:
@@ -165,7 +241,112 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, nogui=False)
+        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False)
+
+    def handle_predict_test_set(self):
+        if self.df is None:
+            messagebox.showerror("Error", "No dataset loaded. Please load or combine CSVs first.")
+            return
+        try:
+            predict_name = os.path.join(self.tool_dir, "test_predictions.csv")
+            cm_filename = os.path.join(self.tool_dir, "confusion_matrix.csv")
+            report_filename = os.path.join(self.tool_dir, "classification_report.csv")
+            text_file = open(os.path.join(self.tool_dir, "prediction_log.txt"), "w")
+            from custom_functions_for_python import predictTestSet
+            predictTestSet(self,
+                model_path=self.model_path,
+                predict_name=predict_name,
+                data=self.df,
+                target_name="source_label",
+                weight_name="weight",
+                cm_filename=cm_filename,
+                report_filename=report_filename,
+                text_file=text_file
+            )
+            text_file.close()
+            self.refresh_comboboxes()
+            #self.update_plot()
+            #self.update_summary_table()
+            messagebox.showinfo("Success", "Test set predictions completed and saved.")
+        except Exception as e:
+            messagebox.showerror("Prediction Error", f"Failed to predict test set:\n{e}")
+
+
+    def build_expertise_matrix_editor(self, parent_frame):
+        tk.Label(parent_frame, text="Edit expertise levels assigned to your dataset (optional):").pack(pady=(20, 5))
+        tree_frame = tk.Frame(parent_frame)
+        tree_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        self.tree = ttk.Treeview(tree_frame, show="headings")
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        try:
+            df = pd.read_csv(expertise_matrix_path)
+            self.expertise_df = df
+            self.tree["columns"] = list(df.columns)
+
+            for col in df.columns:
+                self.tree.heading(col, text=col)
+                self.tree.column(col, width=100)
+
+            for _, row in df.iterrows():
+                self.tree.insert("", "end", values=list(row))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load expertise_matrix.csv:\n{e}")
+            return
+
+        self.tree.bind("<Double-1>", self.on_double_click)
+
+        save_btn = tk.Button(parent_frame, text="Save Expertise Matrix", command=self.save_expertise_matrix)
+        save_btn.pack(pady=10)
+
+
+    def on_double_click(self, event):
+        region = self.tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+
+        row_id = self.tree.identify_row(event.y)
+        column = self.tree.identify_column(event.x)
+        col_index = int(column[1:]) - 1
+
+        x, y, width, height = self.tree.bbox(row_id, column)
+        value = self.tree.set(row_id, column)
+
+        entry = tk.Entry(self.tree)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, value)
+        entry.focus()
+
+        def on_focus_out(event):
+            new_value = entry.get()
+            if col_index > 0:  # Only validate numeric columns
+                if new_value not in {"1", "2", "3"}:
+                    messagebox.showerror("Invalid Input", "Please enter 1, 2, or 3.")
+                    entry.destroy()
+                    return
+            self.tree.set(row_id, column, new_value)
+            entry.destroy()
+
+        entry.bind("<FocusOut>", on_focus_out)
+        entry.bind("<Return>", lambda e: on_focus_out(e))
+
+    def save_expertise_matrix(self):
+        try:
+            rows = []
+            for item in self.tree.get_children():
+                rows.append(self.tree.item(item)["values"])
+            df = pd.DataFrame(rows, columns=self.expertise_df.columns)
+            df.to_csv(expertise_matrix_path, index=False)
+            messagebox.showinfo("Saved", "Expertise matrix saved successfully.")
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Failed to save file:\n{e}")
+
+
 
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
@@ -178,8 +359,9 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
-        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.model_path, nogui=False)).pack(pady=5)
-        tk.Button(self.tab_download, text="Test Classifier", command=lambda: test_classifier(self.df, self.model_path, nogui=False)).pack(pady=5)
+        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, nogui=False, self = self)).pack(pady=5)
+        tk.Button(self.tab_download, text="Predict Test Set", command=self.handle_predict_test_set).pack(pady=5)
+        self.build_expertise_matrix_editor(self.tab_download)
 
     def build_visualization_tab(self):
         self.x_variable_combobox = ttk.Combobox(self.tab_visualize)
@@ -288,34 +470,50 @@ class UnifiedApp:
 
     def refresh_comboboxes(self):
         if self.df is not None:
-            columns = list(self.df.columns)
-            self.x_variable_combobox['values'] = columns
-            self.y_variable_combobox['values'] = columns
-            self.color_variable_combobox['values'] = columns
-
+            variables = list(self.df.columns)
+            color_options = []
+            if 'label' in self.df.columns:
+                color_options.append('label')
+            if 'predicted_label' in self.df.columns:
+                color_options.append('predicted_label')
+            if 'agreement' in self.df.columns:
+                color_options.append('agreement')
+            if not color_options:
+                color_options = [col for col in self.df.columns if self.df[col].nunique() <= 50]
+            self.x_variable_combobox['values'] = variables
+            self.y_variable_combobox['values'] = variables
+            self.color_variable_combobox['values'] = color_options
+            if 'FWS_total' in variables and 'FWS_maximum' in variables:
+                self.x_variable_combobox.set('FWS_total')
+                self.y_variable_combobox.set('FWS_maximum')
+            else:
+                self.x_variable_combobox.set(variables[0])
+                self.y_variable_combobox.set(variables[1] if len(variables) > 1 else variables[0])
+            default_color = 'label' if 'label' in self.df.columns else (color_options[0] if color_options else variables[0])
+            self.color_variable_combobox.set(default_color)
 
 
     def load_csv(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             self.df = pd.read_csv(file_path)
-            if 'label' in self.df.columns and 'predictions_data' in self.df.columns:
-                self.df['agreement'] = self.df['label'] == self.df['predictions_data']
+            if 'label' in self.df.columns and 'predicted_label' in self.df.columns:
+                self.df['agreement'] = self.df['label'] == self.df['predicted_label']
             else:
                 self.df['agreement'] = pd.NA
-            if 'predictions_data' not in self.df.columns:
-                self.df['predictions_data'] = pd.NA
+            if 'predicted_label' not in self.df.columns:
+                self.df['predicted_label'] = pd.NA
             color_options = []
             if 'label' in self.df.columns:
                 color_options.append('label')
-            if 'predictions_data' in self.df.columns:
-                color_options.append('predictions_data')
+            if 'predicted_label' in self.df.columns:
+                color_options.append('predicted_label')
             if 'agreement' in self.df.columns:
                 color_options.append('agreement')
             variables = self.df.columns.tolist()
             self.x_variable_combobox['values'] = variables
             self.y_variable_combobox['values'] = variables
-            self.color_variable_combobox['values'] = color_options if color_options else variables
+            self.color_variable_combobox['values'] = color_options if color_options else [col for col in self.df.columns if self.df[col].nunique() <= 50]
             if 'FWS_total' in variables and 'FWS_maximum' in variables:
                 self.x_variable_combobox.set('FWS_total')
                 self.y_variable_combobox.set('FWS_maximum')
@@ -323,8 +521,8 @@ class UnifiedApp:
                 self.x_variable_combobox.set(variables[0])
                 self.y_variable_combobox.set(variables[1])
             self.color_variable_combobox.set('label' if 'label' in self.df.columns else (color_options[0] if color_options else variables[0]))  # Default color variable
-            update_plot()
-            update_summary_table()
+            self.update_plot()
+            self.update_summary_table()
 
 
     def load_json(self):
@@ -363,17 +561,17 @@ class UnifiedApp:
 
     def onselect(self, verts):
         self.current_polygon = verts
-        self.current_predictions_data = simpledialog.askstring("Prediction", "Enter prediction label:")
+        self.current_predicted_label = simpledialog.askstring("Prediction", "Enter prediction label:")
         self.commit_polygon()
 
     def commit_polygon(self):
-        if self.df is None or self.current_polygon is None or self.current_predictions_data is None:
+        if self.df is None or self.current_polygon is None or self.current_predicted_label is None:
             return
         path = Path(self.current_polygon)
         x = self.x_variable_combobox.get()
         y = self.y_variable_combobox.get()
         mask = self.df.apply(lambda row: path.contains_point((row[x], row[y])), axis=1)
-        self.df.loc[mask, 'predictions_data'] = self.current_predictions_data
+        self.df.loc[mask, 'predicted_label'] = self.current_predicted_label
         self.update_summary_table()
         self.update_plot()
 
@@ -392,7 +590,7 @@ class UnifiedApp:
                 self.df.to_csv(file_path, index=False)
                 metadata = {
                     "polygons": self.polygons,
-                    "predictions_datas": self.predictions_datas
+                    "predicted_labels": self.predicted_labels
                 }
                 with open(file_path.replace(".csv", "_metadata.json"), 'w') as f:
                     json.dump(metadata, f)
@@ -415,8 +613,8 @@ class UnifiedApp:
                         processed_files.add(processed_url)
         blob_files = [blob_file for blob_file in blob_files if f"{container_url}/{blob_file}" not in processed_files]
         for blob_file in blob_files:
-            instrument_file = os.path.join(self.temp_dir, f"{os.path.basename(blob_file)}_instrument.csv")
-            predictions_file = os.path.join(self.temp_dir, f"{os.path.basename(blob_file)}_predictions.csv")
+            instrument_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_instrument.csv")
+            predictions_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_predictions.csv")
             prediction_counts_path = predictions_file + "_counts.csv"
             plot3d_prediction_path = predictions_file + "_3d.html"
             url = f"{container_url}/{blob_file}{sas_token}"
@@ -427,7 +625,7 @@ class UnifiedApp:
                 except Exception as e:
                     log_message(f"No file to delete: {e} (this is fine)")
             try:
-                downloaded_file = download_file(url, self.temp_dir, self.cyz_file)
+                downloaded_file = download_file(url, self.tool_dir, self.cyz_file)
                 log_message(f"Success: Blob downloaded for {url_notoken}")
                 load_file(self.path_entry.get(), downloaded_file, self.json_file)
                 log_message(f"Success: Cyz2json applied {url_notoken}")
@@ -441,13 +639,13 @@ class UnifiedApp:
                 upload_to_blob(predictions_file,  sas_token, container,output_blob_folder)
                 log_message(f"Success: Uploaded {url_notoken}")
                 predictions_df = pd.read_csv(predictions_file)
-                prediction_counts = predictions_df['predictions_data'].value_counts().reset_index()
+                prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
                 prediction_counts.columns = ['class', 'count']
                 prediction_counts.to_csv(prediction_counts_path, index=False)
                 upload_to_blob(prediction_counts_path,  sas_token,container, output_blob_folder)
                 log_message(f"Success: counted {url_notoken}")
                 data = pd.read_csv(predictions_file)
-                data['category'] = data['predictions_data']
+                data['category'] = data['predicted_label']
                 unique_categories = data['category'].unique()
                 preset_colors = {
                     'rednano': 'red',

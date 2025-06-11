@@ -47,9 +47,18 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "Line2D", "PolygonSelector", "Path", "buildSupervisedClassifier", "loadClassifier",
     "subprocess", "zipfile", "extract", "re","test_model","train_classifier","combine_csv_files","convert_json_to_listmode",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
-    "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier"]
+    "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier","expertise_matrix_path"]
 
-def train_model(df, model_path, nogui=False):
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(".")
+
+expertise_matrix_path = os.path.join(base_path, "expertise_matrix.csv")
+
+
+def train_model(df, plots_dir, model_path, nogui=False, self = None):
     try:
         if df is None:
             if nogui:
@@ -58,12 +67,13 @@ def train_model(df, model_path, nogui=False):
                 from tkinter import messagebox
                 messagebox.showerror("Error", "No data to train on.")
             return
-        train_classifier(df, model_path)
+        train_classifier(df, plots_dir, model_path)
         if nogui:
             print("Model training completed successfully.")
         else:
             from tkinter import messagebox
             messagebox.showinfo("Training Complete", "Model training completed successfully.")
+            notebook = ttk.Notebook(self.root)
     except Exception as e:
         if nogui:
             print(f"Training Error: Failed to train model: {e}")
@@ -104,32 +114,32 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, nogui=False):
-    expertise_levels = {
-        'expert': ['Veronique'],
-        'advanced': ['Alice'],
-        'non_expert': ['Joe']
-    }
+def combine_csvs(output_path, expertise_matrix_path, nogui=False):
     if nogui:
-        zonechoices = "PELTIC" # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
+        zonechoices = "PELTIC"  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
         zonechoices = choose_zone_folders(output_path)
+
     try:
+        expertise_matrix = pd.read_csv(expertise_matrix_path, index_col=0)
+        expertise_levels = expertise_matrix.loc[zonechoices].to_dict()
+        expertise_levels = {
+            'expert': [k for k, v in expertise_levels.items() if v == 3],
+            'advanced': [k for k, v in expertise_levels.items() if v == 2],
+            'non_expert': [k for k, v in expertise_levels.items() if v == 1]
+        }
+
         print("Zone choices:", zonechoices)
+        print("expertise_levels:", expertise_levels)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
-        print("Unique weights:", list(set(combined_df['weight'])))
-        print("Original source labels:", list(set(combined_df['source_label'])))
-        print('Only keeping particles with greatest weighting')
-        combined_df = combined_df[combined_df['weight'] == np.nanmax(combined_df['weight'])]
-        print("Filtered weights:", list(set(combined_df['weight'])))
         combined_df['source_label'] = [
             re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
         ]
         combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
         print('Cleaned group names to something consistent')
         print("Cleaned source labels:", list(set(combined_df['source_label'])))
-        print("Now dropping columns: ['weight', 'consensus_label', 'sample_weight']")
-        combined_df = combined_df.drop(columns=['weight', 'consensus_label', 'sample_weight'])
+        print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
+        combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -148,6 +158,7 @@ def combine_csvs(output_path, nogui=False):
         else:
             messagebox.showerror("Combine Error", f"Failed to combine CSVs: {e}")
         return None
+
 
 def sample_rows(df, sample_rate=0.001):
     return df.sample(frac=sample_rate)
@@ -229,14 +240,14 @@ class FileHandler(FileSystemEventHandler):
             log_message(f"Success: Predictions made for {file_path}")
 
             predictions_df = pd.read_csv(predictions_file)
-            prediction_counts = predictions_df['predictions_data'].value_counts().reset_index()
+            prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
             prediction_counts.columns = ['class', 'count']
             prediction_counts_path = predictions_file + "_counts.csv"
             prediction_counts.to_csv(prediction_counts_path, index=False)
             log_message(f"Success: counted {file_path}")
 
             data = pd.read_csv(predictions_file)
-            data['category'] = data['predictions_data']
+            data['category'] = data['predicted_label']
             unique_categories = data['category'].unique()
             preset_colors = {
                 'rednano': 'red',
@@ -285,9 +296,11 @@ class FileHandler(FileSystemEventHandler):
             plot3d_prediction_path = predictions_file + "_3d.html"
             pio.write_html(fig, file=plot3d_prediction_path, auto_open=False)
             log_message("Plot saved as '3D_Plot.html'.")
+            delete_file(listmode_file)
+            delete_file(json_file)
 #            delete_file(plot3d_prediction_path)
 #            delete_file(instrument_file)
-            delete_file(predictions_file)
+#            delete_file(predictions_file)
 #            delete_file(prediction_counts_path)
         except Exception as e:
             log_message(f"Error: An error occurred processing {file_path}: {e}")
@@ -325,11 +338,11 @@ def list_blobs(container_url, sas_token):
         log_message(f"Blob Listing Error: Failed to list blobs: {e}")
         return []
 
-def download_file(url, temp_dir, filename):
+def download_file(url, tool_dir, filename):
     try:
         response = requests.get(url, allow_redirects=True)
         response.raise_for_status()
-        downloaded_file = os.path.join(temp_dir, filename)
+        downloaded_file = os.path.join(tool_dir, filename)
         with open(downloaded_file, 'wb') as file:
             file.write(response.content)
         return downloaded_file
@@ -356,22 +369,35 @@ def to_listmode(json_file, listmode_file):
 
 def apply_python_model(listmode_file, predictions_file, model_path):
     try:
-        model, classes, features = loadClassifier(model_path, model_path)
+        model, classes, features = loadClassifier(model_path)
         df = pd.read_csv(listmode_file)
         df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
         df = df.dropna()
-
         # Ensure only required features are used
         print("Your model expects these columns:", features)
         print("Your data file has these columns:", df.columns.tolist())
-        df = df[features]
+        try:
+            df = df[features]
+        except:
+            print("Getting a not in index error? That means columns in this data file do not match those the model was trained on. Is this file from a different flow cytometer?")
         print("Predicting ...")
-        predictions = model.predict(df)
-        df['predictions_data'] = predictions
-        df.to_csv(predictions_file, index=False)
+        # Classify data, predict the labels and probabilities
+        predictions = model.predict(df[features])
+        proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
+        predicted_data = df
+        # Add prediction to original test table
+        predicted_data['predicted_label'] = predictions 
+        # Make the column names of this data frame the class names (instead of numbers)
+        proba_predict = proba_predict.set_axis(classes, axis=1)
+        # Bind both data frames by column
+        full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+        # Save final predicted table
+        full_predicted.to_csv(predictions_file)        
         log_message(f"Prediction Success: Predictions saved to {predictions_file}")
     except Exception as e:
         log_message(f"Prediction Error: Failed to apply Python model: {e}")
+
+
 
 
 
@@ -392,18 +418,22 @@ def convert_json_to_listmode(output_path):
             if file.lower().endswith(".json") and not file.endswith("instrument.csv"):
                 json_file = os.path.join(root, file)
                 listmode_file = os.path.splitext(json_file)[0] + ".csv"
-                with open(json_file, encoding="utf-8-sig") as f:
-                    data = json.load(f)
-                lines = extract(
-                    particles=data["particles"],
-                    dateandtime=data["instrument"]["measurementResults"]["start"],
-                    images='',
-                    save_images_to=''
-                )
-                df = pd.DataFrame(lines)
-                df.to_csv(listmode_file, index=False)
-                dict_to_csv(data['instrument'], listmode_file + 'instrument.csv')
-                print(f"Converted: {json_file} → {listmode_file}")
+                try:
+                    with open(json_file, encoding="utf-8-sig") as f:
+                        data = json.load(f)
+                    lines = extract(
+                        particles=data["particles"],
+                        dateandtime=data["instrument"]["measurementResults"]["start"],
+                        images='',
+                        save_images_to=''
+                    )
+                    df = pd.DataFrame(lines)
+                    df.to_csv(listmode_file, index=False)
+                    dict_to_csv(data['instrument'], listmode_file + 'instrument.csv')
+                    print(f"Converted: {json_file} → {listmode_file}")
+                except Exception as e:
+                    print(f"Error processing file: {json_file}")
+                    print(f"Exception: {e}")
 
 def combine_csv_files(output_path):
     variation_pattern = re.compile(r'_(\w+)\.cyz\.csv$')
@@ -432,6 +462,51 @@ def choose_zone_folders(output_path):
     folders = [name for name in os.listdir(output_path) if os.path.isdir(os.path.join(output_path, name))]
     zonechoice = simpledialog.askstring("Zone Choice", f"Choose a zone from: {', '.join(folders)}")
     return zonechoice
+
+
+def compute_consensual_labels_and_sample_weights(data):
+    from collections import Counter
+
+    def get_weighted_mode(labels, weights):
+        counter = Counter()
+        for label, weight in zip(labels, weights):
+            counter[label] += weight
+        most_common_label, most_common_weight = counter.most_common(1)[0]
+        return most_common_label, most_common_weight
+
+    # Group by 'id'
+    grouped = data.groupby('id')
+
+    # Initialize lists to store results
+    consensus_labels = []
+    sample_weights = []
+    ids = []
+
+    for name, group in grouped:
+        labels = group['source_label']
+        weights = group['weight']
+        consensus_label, consensus_weight = get_weighted_mode(labels, weights)
+        total_weight = weights.sum()
+        sample_weight = consensus_weight / total_weight
+        if consensus_label != "Unassigned Particles":
+            ids.append(name)
+            consensus_labels.append(consensus_label)
+            sample_weights.append(sample_weight)
+
+    # Create a DataFrame with consensus results
+    consensus_df = pd.DataFrame({
+        'id': ids,
+        'consensus_label': consensus_labels,
+        'sample_weight': sample_weights
+    })
+
+    # Merge back into the original data
+    merged_df = data.merge(consensus_df, on='id', how='inner')
+
+    return merged_df
+
+
+
 
 def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     """
@@ -474,42 +549,39 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     combined_df = pd.concat(all_data, ignore_index=True)
     combined_df.columns = combined_df.columns.str.replace(r'\s+', '_', regex=True)
     combined_df = combined_df.dropna()
+    print(combined_df)
     
-    # Apply weighted majority vote for consensus labels
-    combined_df['weight'] = combined_df['person'].apply(lambda x: next((expertise_weights[level] for level, people in expertise_levels.items() if x in people), 1))
-    combined_df['weighted_label'] = combined_df.groupby(['source_label', 'person'])['weight'].transform('sum')
+    # Flatten the expertise_levels into a person-to-weight mapping
+    person_to_weight = {
+        person: expertise_weights[level]
+        for level, people in expertise_levels.items()
+        for person in people
+    }
 
-    # Determine the final label for each particle
-    consensus_labels = combined_df.groupby('source_label')['weighted_label'].agg(lambda x: x.idxmax())
-    combined_df['consensus_label'] = combined_df['source_label'].map(consensus_labels)
-    
-    # Assign sample weights based on agreement level
-    combined_df['sample_weight'] = combined_df.groupby('source_label')['consensus_label'].transform('count') / combined_df.groupby('source_label')['consensus_label'].transform('size')
-    
-    # Remove individual people columns
-    combined_df = combined_df.drop(columns=['person', 'weighted_label'])
-    
+    # Assign person weights
+    combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
+
+    # Compute consensus label per particls
+    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    combined_df['source_label'] = combined_df['consensus_label']
+    print(combined_df)
+    combined_df = combined_df.reset_index()
+    print(combined_df)
     return combined_df
 
 
-def plot_cv_results(cv_results):
+def plot_cv_results(cv_results,plots_dir):
     plotlist = []
     best_results = cv_results[cv_results['iter'] == cv_results['iter'].max()].groupby(['param_classifier', 'outer_splits']).apply(lambda x: x.loc[x['mean_test_score'].idxmax()])
 
     for outer in cv_results['outer_splits'].unique():
         outer_score = round(cv_results[cv_results['outer_splits'] == outer]['outer_split_test_score'].unique()[0], 3)
         best_params = best_results[best_results['outer_splits'] == outer][['param_classifier','param_classifier__learning_rate','param_classifier__max_depth','param_classifier__max_features','param_classifier__C','param_classifier__l1_ratio','param_classifier__max_samples']].values[0]
-        
-        plt.figure(figsize=(12, 8))
-        sns.lineplot(data=cv_results[cv_results['outer_splits'] == outer], x='iter', y='mean_test_score', hue='param_classifier', marker='o')
-        plt.title(f"Outer split {outer}")
-        plt.xlabel("Iteration")
-        plt.ylabel("MCC")
-        plt.xticks(rotation=45)
-        plt.legend(title="Classifier")
-        plt.figtext(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\nOuter CV test score : {outer_score}", wrap=True, horizontalalignment='center', fontsize=10)
-        plt.tight_layout()
-        plotlist.append(plt)
+        fig, ax = plt.subplots(figsize=(12, 8))
+        sns.lineplot(data=cv_results[cv_results['outer_splits'] == outer], x='iter', y='mean_test_score', hue='param_classifier', marker='o', ax=ax)
+        ax.set_title(f"Outer split {outer}"); ax.set_xlabel("Iteration"); ax.set_ylabel("MCC"); ax.tick_params(axis='x', rotation=45); ax.legend(title="Classifier")
+        fig.text(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\\nOuter CV test score : {outer_score}", wrap=True, horizontalalignment='center', fontsize=10)
+        fig.tight_layout(); fig.savefig(os.path.join(plots_dir, f'cv_results_outer_{outer}.png')); plt.close(fig); plotlist.append(fig)
 
     return plotlist
 
@@ -535,25 +607,39 @@ def plot_classifier_props(cv_results):
 
     return plotlist
 
-def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
+
+def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
+    os.makedirs(plots_dir, exist_ok=True)
     def plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters):
         def plot_hyperpar_combi(cv_results, classifier_name, x_axis, y_axis):
+            filtered_results = cv_results.copy()
             if x_axis == "degree" or y_axis == "degree":
-                cv_results = cv_results[cv_results['param_classifier__kernel'] == "poly"]
-            plt.figure(figsize=(12, 8))
-            sns.scatterplot(data=cv_results[cv_results['param_classifier'] == classifier_name], x=x_axis, y=y_axis, hue='mean_test_score', palette='viridis', size='mean_test_score', sizes=(20, 200))
-            plt.xscale('log') if x_axis in ["C", "gamma", "learning_rate"] else None
-            plt.yscale('log') if y_axis in ["C", "gamma", "learning_rate"] else None
-            plt.xlabel(x_axis.replace("_", " "))
-            plt.ylabel(y_axis.replace("_", " "))
-            plt.title(f"{classifier_name} - {x_axis} vs {y_axis}")
-            plt.legend(title="Mean MCC")
-            plt.tight_layout()
-            return plt
+                filtered_results = filtered_results[filtered_results['param_classifier__kernel'] == "poly"]
+            filtered_results = filtered_results[filtered_results['param_classifier'] == classifier_name]
+            fig, ax = plt.subplots(figsize=(12, 8))
+            scatter = sns.scatterplot(
+                data=filtered_results,
+                x=x_axis,
+                y=y_axis,
+                hue='mean_test_score',
+                palette='viridis',
+                size='mean_test_score',
+                sizes=(20, 200),
+                ax=ax
+            )
+            if x_axis in ["C", "gamma", "learning_rate"]:
+                ax.set_xscale('log')
+            if y_axis in ["C", "gamma", "learning_rate"]:
+                ax.set_yscale('log')
+            ax.set_xlabel(x_axis.replace("_", " "))
+            ax.set_ylabel(y_axis.replace("_", " "))
+            ax.set_title(f"{classifier_name} - {x_axis} vs {y_axis}")
+            ax.legend(title="Mean MCC")
+            fig.tight_layout()
+            return fig
         grid = [(x, y) for x in hyperparameters for y in hyperparameters if x != y]
         plot_list = [plot_hyperpar_combi(cv_results, classifier_name, x, y) for x, y in grid]
         return plot_list
-    
     logreg_hyperpars = ["param_classifier__C", "param_classifier__l1_ratio"]
     rf_hyperpars = ["param_classifier__max_features", "param_classifier__max_samples"]
     hgb_hyperpars = ["param_classifier__max_depth", "param_classifier__max_features", "param_classifier__learning_rate"]
@@ -565,40 +651,53 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results):
     for classifier_name, hyperparameters in classifiers_hyperpars.items():
         print(f"Plotting hyperparameter combinations for {classifier_name}")
         plot_list = plot_all_hyperpars_combi(cv_results, classifier_name, hyperparameters)
-        for plot in plot_list:
-            plot.show()
+        for i, fig in enumerate(plot_list):
+            fig.savefig(os.path.join(plots_dir, f'{classifier_name}_plot_{i+1}.png'))
+            plt.close(fig)
 
 
-def train_classifier(df, model_path):
-    df["group"] = df.index
+
+
+def train_classifier(df, plots_dir, model_path):
+    df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
-
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
     cores = 1 if is_frozen else os.cpu_count()
     
     # Split the data
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, stratify=cleaned_df["source_label"], random_state=42)
-
+    
     # Train on training set
     buildSupervisedClassifier(
         training_set=train_df,
         target_name="source_label",
         group_name="group",
-        inner_k=2,
-        outer_k=2,
+        weight_name="weight",
         select_K=5,
         cores=cores,
-        lc_k=2,
-        n_sizes=2,
-        filename_cvResults="cv_results.csv",
-        filename_learningCurve="learning_curve.png",
-        filename_finalFittedModel=model_path
+        n_sizes=4,
+        filename_cvResults=os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"),
+        filename_learningCurve=os.path.join(os.path.dirname(model_path),"learning_curve" + os.path.basename(model_path) + ".csv"),
+        filename_finalFittedModel=model_path,
+        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
+        validation_set = test_df       
     )
 
     # Evaluate on test set
-    model, classes, features = loadClassifier(model_path, model_path)
-    predictions = model.predict(test_df[features])
+    model, classes, features = loadClassifier(model_path)
+    test_df_filtered=test_df[features]
+    predictions = model.predict(test_df_filtered)
+    proba_predict = pd.DataFrame(model.predict_proba(test_df_filtered)) # compute class prediction probabilities and store in data frame
+    predicted_data = test_df
+    # Add prediction to original test table
+    predicted_data['predicted_label'] = predictions 
+    # Make the column names of this data frame the class names (instead of numbers)
+    proba_predict = proba_predict.set_axis(classes, axis=1)
+    # Bind both data frames by column
+    full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+    # Save final predicted table
+    #full_predicted.to_csv(predict_name)        
     print("Test Set Evaluation:\n", classification_report(test_df["source_label"], predictions))
 
     # Confusion Matrix
@@ -611,20 +710,33 @@ def train_classifier(df, model_path):
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
     plt.title('Confusion Matrix')
+    plt.savefig(plots_dir+f'/confusionmatrix.png')
     plt.show()
     
-    cv_results = pd.read_csv("cv_results.csv")
+    
+    cv_results = pd.read_csv(os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"))
 
     try:
-        plot_cv_results(cv_results)
+        plot_cv_results(cv_results,plots_dir)
         plot_classifier_props(cv_results)
-        plot_all_hyperpars_combi_and_classifiers_scores(cv_results)
+        plot_all_hyperpars_combi_and_classifiers_scores(cv_results,plots_dir)
     except Exception as e:
         print(f"Could not plot CV results: {e}")
 
 def test_model(df, model_path):
-    model, classes, features = loadClassifier(model_path, model_path)
+    model, classes, features = loadClassifier(model_path)
+    df=df[features]
     predictions = model.predict(df[features])
+    proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
+    predicted_data = df
+    # Add prediction to original test table
+    predicted_data['predicted_label'] = predictions 
+    # Make the column names of this data frame the class names (instead of numbers)
+    proba_predict = proba_predict.set_axis(classes, axis=1)
+    # Bind both data frames by column
+    full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
+    # Save final predicted table
+    #full_predicted.to_csv(predict_name) 
     df['predicted_label'] = predictions
     summary = df['predicted_label'].value_counts().to_string()
     return df, summary
@@ -653,6 +765,7 @@ def convert_cyz_to_json(input_dir, output_dir, dll_path):
     for root, _, files in os.walk(input_dir):
         for file in files:
             if file.lower().endswith(".cyz"):
+                print(file)
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, input_dir)
                 rel_dir = os.path.dirname(rel_path)
@@ -711,7 +824,7 @@ def dict_to_csv(data, output_file):
     for item in flattened_data:
         header.update(item.keys())
     header = sorted(header)
-    with open(output_file, 'w', newline='') as file:
+    with open(output_file, 'w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=header)
         writer.writeheader()
         for item in flattened_data:
@@ -719,10 +832,10 @@ def dict_to_csv(data, output_file):
     print(f"Data saved to {output_file}")
 
 
-def clear_temp_folder(temp_dir):
+def clear_temp_folder(tool_dir):
     """Clear the temporary directory."""
-    for filename in os.listdir(temp_dir):
-        file_path = os.path.join(temp_dir, filename)
+    for filename in os.listdir(tool_dir):
+        file_path = os.path.join(tool_dir, filename)
         try:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
@@ -828,7 +941,7 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
 
 def plot3d(predictions_file):
     data = pd.read_csv(predictions_file)
-    data['category'] = data['predictions_data']
+    data['category'] = data['predicted_label']
     unique_categories = data['category'].unique()
 
     preset_colors = {
@@ -888,11 +1001,11 @@ def summarize_predictions(df, pumped_volume):
     """Generate a summary of labelled and predicted data counts."""
     summary = []
     labels = df['label'].dropna().unique() if 'label' in df.columns else []
-    preds = df['predictions_data'].dropna().unique() if 'predictions_data' in df.columns else []
+    preds = df['predicted_label'].dropna().unique() if 'predicted_label' in df.columns else []
     all_classes = set(labels).union(preds)
     for cls in all_classes:
         label_count = (df['label'] == cls).sum() / pumped_volume if 'label' in df.columns else 0
-        pred_count = (df['predictions_data'] == cls).sum() / pumped_volume if 'predictions_data' in df.columns else 0
+        pred_count = (df['predicted_label'] == cls).sum() / pumped_volume if 'predicted_label' in df.columns else 0
         percent = (pred_count / label_count * 100) if label_count else 0
         summary.append((cls, label_count, pred_count, f"{percent:.2f}%"))
     return summary
@@ -902,11 +1015,12 @@ def run_backend_only():
     print("🔧 Running in no-GUI mode...")
 
     # Setup paths
-    temp_dir = os.path.join(os.getenv('APPDATA', '/tmp'), 'blobfileloader')
+    tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
     download_path = os.path.join("exampledata/")
     output_path = os.path.join("extraction/")
-    cyz2json_dir = os.path.join(temp_dir, "cyz2json")
-    model_dir = os.path.join(temp_dir, "models")
+    cyz2json_dir = os.path.join(tool_dir, "cyz2json")
+    model_dir = os.path.join(tool_dir, "models")
+    plots_dir = os.path.join(tool_dir, "plots")
     model_path = os.path.join(model_dir, "final_model.pkl")
 
     os.makedirs(download_path, exist_ok=True)
@@ -932,19 +1046,37 @@ def run_backend_only():
 
         # 5. Combine CSVs
         print("📊 Combining CSV files...")
-        df = combine_csvs(output_path, nogui=True)
+        df = combine_csvs(output_path, expertise_matrix_path, nogui=True)
         if df is None:
             print("⚠️ No CSV files found.")
             return
 
         # 6. Train Model
         print("🤖 Training model...")
-        train_model(df, model_path, nogui=True)
+        train_model(df, plots_dir, model_path, nogui=True, self = None)
+    
+        # 7. Predict Test Set using updated function
+        print("🧪 Predicting test set...")
+        from custom_functions_for_python import predictTestSet
 
-        # 7. Test Classifier
-        print("🧪 Testing classifier...")
-        df, summary = test_classifier(df, model_path, nogui=True)
-        print("✅ Prediction Summary:\n", summary)
+        predict_name = os.path.join(tool_dir, "test_predictions.csv")
+        cm_filename = os.path.join(tool_dir, "confusion_matrix.csv")
+        report_filename = os.path.join(tool_dir, "classification_report.csv")
+        text_file_path = os.path.join(tool_dir, "prediction_log.txt")
+
+        with open(text_file_path, "w") as text_file:
+            predictTestSet(
+                self=None,
+                model_path=model_path,
+                predict_name=predict_name,
+                data=df,
+                target_name="source_label",
+                weight_name="weight",
+                cm_filename=cm_filename,
+                report_filename=report_filename,
+                text_file=text_file
+            )
+        print("✅ Test set predictions completed and saved.")
 
     except Exception as e:
         print(f"❌ Error during headless execution: {e}")

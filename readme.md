@@ -20,12 +20,7 @@ This python code is being developed with marine research in mind, where understa
 There are a few python tools here in various states. This repository resembles an attempt to put them in one place, anticipating that we will be using a random forest model to classify the flow cytometer data being generated on the RV cefas endeavour.
 It is developed around a handful of labelled flow cytometer files held in https://citprodflowcytosa.blob.core.windows.net/public/exampledata/ but you could export your own data from cytoclus software and put them in flowcytometertools/exampledata/. To do this in cytoclus, first select your file, with sets defined, under "Database" click Exports and check the box for CYZ file (for set)
 This was developed on windows but a github actions workflow tests whether the `Download & Train` tab will work on a linux machine.
-Ideally any users should be familiar with python because in all likelihood something will break. 
-
-Acknowledgements to:
-Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
-Sebastien Galvagno, Eric Payne and Rob Blackwell for their parts played in cyz2json (flowcytometertool uses https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5)
-OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
+Ideally any users should be familiar with python because in all likelihood something will break.
 
 
 ## Download
@@ -45,14 +40,19 @@ VERSION="0.0.0.1"; git tag -a v$VERSION -m "Release version $VERSION"; git push 
 
 
 
-
 ## Tabs Overview
 
 ### 1: `Download & Train`
-This tab wraps the model training functions developed during Lucinda Lanoy’s Masters research in a simplified `tkinter` GUI (replacing the original R Markdown interface). It allows users to:
-
-- Train machine learning models, including Random Forests, using `scikit-learn`.
-- Run the training process on both Windows and Linux (tested via GitHub Actions on a Linux runner).
+This tab wraps the model training functions developed during Lucinda Lanoy’s Masters research in a simplified `tkinter` GUI (replacing the original R Markdown interface). It allows users to train machine learning models, including Random Forests, using `scikit-learn`.
+Click on the buttons in sequence from top-to-bottom, these will:
+1) Download the data from a blob store. By default this should be set to the public data in https://citprodflowcytosa.blob.core.windows.net/public/exampledata/ which needs no SAS authentication. If you change it to a blob store that needs authenticating, put a path to your SAS key saved as a plain .txt file in the "blob tools" tab.
+2) Downloads the cyz2json executable you need
+3) Applies the cyz2json to the downloaded data. Your CYZ files should now be json files instead (this step is invoked by subprocess and no check is implemented to ensure it has worked).
+4) Converts your json files to listmode csvs. "Listmode" is the part of the json file which pertains to the laser summaries. This step therefore leaves behind any images taken and the full pulse shape is not taken out of the json files either.
+5) Combine CSVs, specifying the Zone you want to train for. Training across multiple zones is not yet implemented. Note the expertise matrix which assigns a level of expertise (1 being non-expert, 2 being intermediate, 3 being expert). If there is a disagreement on a label, the expert will be prioritised.
+6) Train model. A split of your data will be taken for training, some will be retained for testing. This trains a LOT of models in sklearn, searching for the best model variables in your data and best hyperparameters.
+7) Test classifier against the test dataset.
+- You can run the training process on both Windows and Linux (tested via GitHub Actions on a Linux runner).
 - *Note:* Building a release hasn’t been tested recently.
 
 ---
@@ -102,3 +102,20 @@ This utility monitors a local directory for new `.CYZ` files and automatically p
 - Outputs results to a specified destination directory.
 - *Known issues:*
   - Not recently tested.
+
+
+## Acknowledgements to
+Lucinda Lanoy for her masters work in custom_functions_for_python.py https://github.com/CefasRepRes/lucinda-flow-cytometry on model training.
+
+Sebastien Galvagno, Eric Payne and Rob Blackwell for their parts played in cyz2json (flowcytometertool uses https://github.com/OBAMANEXT/cyz2json/releases/tag/v0.0.5)
+
+OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
+
+•	Lotty = EXP1, "expert" level on Mediterranean data, considered "non expert" for the other zones,
+•	Clementine = EXP2, "advanced" level on Mediterranean data, considered "non expert" for the other zones, 
+•	Lumi = EXP3, "expert" level on Baltic data, considered "non expert" for the other zones, 
+•	Zeline = EXP4, "expert" level on English Channel data, considered "non expert" for the other zones, 
+•	Veronique = EXP5, "expert" level on Celtic data, considered "non expert" for the other zones.
+•	Joe = EXP6, "non expert" for all zones.
+
+<a target="_blank" href="https://icons8.com/icon/yRsdMbdfhpk6/laser">Laser</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a>

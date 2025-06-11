@@ -4,8 +4,8 @@
 a = Analysis(
     ['trainer_lucinda_version.py'],
     pathex=[],
-    binaries=[],
-    datas=[('readme.md', '.')],
+    binaries=[],	
+    datas=[('readme.md', '.'),('expertise_matrix.csv', '.')],
     hiddenimports=['functions', 'custom_functions_for_python', 'listmode','sys','requests'],
     hookspath=[],
     hooksconfig={},
@@ -32,6 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='icons8-laser-96.ico',
 )
 coll = COLLECT(
     exe,
