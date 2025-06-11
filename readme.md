@@ -118,4 +118,4 @@ OBAMA-NEXT Data labellers Veronique, Lumi, Zeline, Lotty and Clementine.
 •	Veronique = EXP5, "expert" level on Celtic data, considered "non expert" for the other zones.
 •	Joe = EXP6, "non expert" for all zones.
 
-<a target="_blank" href="https://icons8.com/icon/9BGggjd4JDas/laser">Laser</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a>
+<a target="_blank" href="https://icons8.com/icon/yRsdMbdfhpk6/laser">Laser</a> icon by <a target="_blank" href="https://icons8.com">Icons8</a>
