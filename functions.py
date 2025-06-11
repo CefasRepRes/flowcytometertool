@@ -672,16 +672,20 @@ def train_classifier(df, plots_dir, model_path):
 
     # Evaluate on test set
     model, classes, features = loadClassifier(model_path)
-    df=df[features]
-    predictions = model.predict(df[features])
-    proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
-    predicted_data = df
+    test_df=test_df[features]
+    predictions = model.predict(test_df[features])
+    proba_predict = pd.DataFrame(model.predict_proba(test_df[features])) # compute class prediction probabilities and store in data frame
+    predicted_data = test_df
     # Add prediction to original test table
     predicted_data['predicted_label'] = predictions 
     # Make the column names of this data frame the class names (instead of numbers)
     proba_predict = proba_predict.set_axis(classes, axis=1)
     # Bind both data frames by column
     print(7)
+    print('predicted_data')
+    print(predicted_data)
+    print('proba_predict')
+    print(proba_predict)
     full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
     # Save final predicted table
     #full_predicted.to_csv(predict_name)        
