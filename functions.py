@@ -368,8 +368,8 @@ def apply_python_model(listmode_file, predictions_file, model_path):
         df = df[features]
         print("Predicting ...")
         # Classify data, predict the labels and probabilities
-        predictions = fitted_final_classifier.predict(df)
-        proba_predict = pd.DataFrame(fitted_final_classifier.predict_proba(df)) # compute class prediction probabilities and store in data frame
+        predictions = fitted_final_classifier.predict(df[features])
+        proba_predict = pd.DataFrame(fitted_final_classifier.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
         predicted_data = df
         # Add prediction to original test table
         predicted_data['predicted_label'] = predictions 
@@ -672,14 +672,16 @@ def train_classifier(df, plots_dir, model_path):
 
     # Evaluate on test set
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(df)
-    proba_predict = pd.DataFrame(model.predict_proba(df)) # compute class prediction probabilities and store in data frame
+    df=df[features]
+    predictions = model.predict(df[features])
+    proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
     predicted_data = df
     # Add prediction to original test table
     predicted_data['predicted_label'] = predictions 
     # Make the column names of this data frame the class names (instead of numbers)
     proba_predict = proba_predict.set_axis(classes, axis=1)
     # Bind both data frames by column
+    print(7)
     full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
     # Save final predicted table
     #full_predicted.to_csv(predict_name)        
@@ -710,8 +712,9 @@ def train_classifier(df, plots_dir, model_path):
 
 def test_model(df, model_path):
     model, classes, features = loadClassifier(model_path)
-    predictions = model.predict(df)
-    proba_predict = pd.DataFrame(model.predict_proba(df)) # compute class prediction probabilities and store in data frame
+    df=df[features]
+    predictions = model.predict(df[features])
+    proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
     predicted_data = df
     # Add prediction to original test table
     predicted_data['predicted_label'] = predictions 
