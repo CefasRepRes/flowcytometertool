@@ -4,8 +4,11 @@
 a = Analysis(
     ['trainer_lucinda_version.py'],
     pathex=[],
-    binaries=[],
-    datas=[('readme.md', 'expertise_matrix.csv','.')],
+    binaries=[],	
+	datas=[
+	    ('readme.md', '.'),
+	    ('expertise_matrix.csv', '.')
+	],
     hiddenimports=['functions', 'custom_functions_for_python', 'listmode','sys','requests'],
     hookspath=[],
     hooksconfig={},
