@@ -1045,11 +1045,29 @@ def run_backend_only():
         # 6. Train Model
         print("🤖 Training model...")
         train_model(df, plots_dir, model_path, nogui=True, self = None)
+    
+        # 7. Predict Test Set using updated function
+        print("🧪 Predicting test set...")
+        from custom_functions_for_python import predictTestSet
 
-        # 7. Test Classifier
-        print("🧪 Testing classifier...")
-        df, summary = test_classifier(df, model_path, nogui=True)
-        print("✅ Prediction Summary:\n", summary)
+        predict_name = os.path.join(tool_dir, "test_predictions.csv")
+        cm_filename = os.path.join(tool_dir, "confusion_matrix.csv")
+        report_filename = os.path.join(tool_dir, "classification_report.csv")
+        text_file_path = os.path.join(tool_dir, "prediction_log.txt")
+
+        with open(text_file_path, "w") as text_file:
+            predictTestSet(
+                self=None,
+                model_path=model_path,
+                predict_name=predict_name,
+                data=df,
+                target_name="source_label",
+                weight_name="weight",
+                cm_filename=cm_filename,
+                report_filename=report_filename,
+                text_file=text_file
+            )
+        print("✅ Test set predictions completed and saved.")
 
     except Exception as e:
         print(f"❌ Error during headless execution: {e}")
