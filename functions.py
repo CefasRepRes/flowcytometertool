@@ -677,9 +677,9 @@ def train_classifier(df, plots_dir, model_path):
 
     # Evaluate on test set
     model, classes, features = loadClassifier(model_path)
-    test_df=test_df[features]
-    predictions = model.predict(test_df[features])
-    proba_predict = pd.DataFrame(model.predict_proba(test_df[features])) # compute class prediction probabilities and store in data frame
+    test_df_filtered=test_df[features]
+    predictions = model.predict(test_df_filtered)
+    proba_predict = pd.DataFrame(model.predict_proba(test_df_filtered)) # compute class prediction probabilities and store in data frame
     predicted_data = test_df
     # Add prediction to original test table
     predicted_data['predicted_label'] = predictions 
