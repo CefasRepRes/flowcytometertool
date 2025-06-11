@@ -47,7 +47,16 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "Line2D", "PolygonSelector", "Path", "buildSupervisedClassifier", "loadClassifier",
     "subprocess", "zipfile", "extract", "re","test_model","train_classifier","combine_csv_files","convert_json_to_listmode",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
-    "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier"]
+    "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier","expertise_matrix_path"]
+
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(".")
+
+expertise_matrix_path = os.path.join(base_path, "expertise_matrix.csv")
+
 
 def train_model(df, plots_dir, model_path, nogui=False, self = None):
     try:
@@ -1037,7 +1046,7 @@ def run_backend_only():
 
         # 5. Combine CSVs
         print("📊 Combining CSV files...")
-        df = combine_csvs(output_path, "expertise_matrix.csv", nogui=True)
+        df = combine_csvs(output_path, expertise_matrix_path, nogui=True)
         if df is None:
             print("⚠️ No CSV files found.")
             return

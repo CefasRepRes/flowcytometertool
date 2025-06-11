@@ -241,7 +241,7 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, "expertise_matrix.csv", nogui=False)
+        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False)
 
     def handle_predict_test_set(self):
         if self.df is None:
@@ -285,7 +285,7 @@ class UnifiedApp:
         self.tree.configure(yscrollcommand=scrollbar.set)
 
         try:
-            df = pd.read_csv("expertise_matrix.csv")
+            df = pd.read_csv(expertise_matrix_path)
             self.expertise_df = df
             self.tree["columns"] = list(df.columns)
 
@@ -341,7 +341,7 @@ class UnifiedApp:
             for item in self.tree.get_children():
                 rows.append(self.tree.item(item)["values"])
             df = pd.DataFrame(rows, columns=self.expertise_df.columns)
-            df.to_csv("expertise_matrix.csv", index=False)
+            df.to_csv(expertise_matrix_path, index=False)
             messagebox.showinfo("Saved", "Expertise matrix saved successfully.")
         except Exception as e:
             messagebox.showerror("Save Error", f"Failed to save file:\n{e}")
