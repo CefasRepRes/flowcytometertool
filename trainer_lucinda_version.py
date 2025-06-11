@@ -45,9 +45,9 @@ class UnifiedApp:
         self.pumped_volume = 1
         self.selector = None
         self.polygons = []
-        self.predictions_datas = []
+        self.predicted_labels = []
         self.current_polygon = None
-        self.current_predictions_data = None
+        self.current_predicted_label = None
         self.dest_path = None
         self.create_widgets()
         self.path_entry = tk.Entry(self.tab_download, width=100)
@@ -474,8 +474,8 @@ class UnifiedApp:
             color_options = []
             if 'label' in self.df.columns:
                 color_options.append('label')
-            if 'predictions_data' in self.df.columns:
-                color_options.append('predictions_data')
+            if 'predicted_label' in self.df.columns:
+                color_options.append('predicted_label')
             if 'agreement' in self.df.columns:
                 color_options.append('agreement')
             if not color_options:
@@ -497,17 +497,17 @@ class UnifiedApp:
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             self.df = pd.read_csv(file_path)
-            if 'label' in self.df.columns and 'predictions_data' in self.df.columns:
-                self.df['agreement'] = self.df['label'] == self.df['predictions_data']
+            if 'label' in self.df.columns and 'predicted_label' in self.df.columns:
+                self.df['agreement'] = self.df['label'] == self.df['predicted_label']
             else:
                 self.df['agreement'] = pd.NA
-            if 'predictions_data' not in self.df.columns:
-                self.df['predictions_data'] = pd.NA
+            if 'predicted_label' not in self.df.columns:
+                self.df['predicted_label'] = pd.NA
             color_options = []
             if 'label' in self.df.columns:
                 color_options.append('label')
-            if 'predictions_data' in self.df.columns:
-                color_options.append('predictions_data')
+            if 'predicted_label' in self.df.columns:
+                color_options.append('predicted_label')
             if 'agreement' in self.df.columns:
                 color_options.append('agreement')
             variables = self.df.columns.tolist()
@@ -561,17 +561,17 @@ class UnifiedApp:
 
     def onselect(self, verts):
         self.current_polygon = verts
-        self.current_predictions_data = simpledialog.askstring("Prediction", "Enter prediction label:")
+        self.current_predicted_label = simpledialog.askstring("Prediction", "Enter prediction label:")
         self.commit_polygon()
 
     def commit_polygon(self):
-        if self.df is None or self.current_polygon is None or self.current_predictions_data is None:
+        if self.df is None or self.current_polygon is None or self.current_predicted_label is None:
             return
         path = Path(self.current_polygon)
         x = self.x_variable_combobox.get()
         y = self.y_variable_combobox.get()
         mask = self.df.apply(lambda row: path.contains_point((row[x], row[y])), axis=1)
-        self.df.loc[mask, 'predictions_data'] = self.current_predictions_data
+        self.df.loc[mask, 'predicted_label'] = self.current_predicted_label
         self.update_summary_table()
         self.update_plot()
 
@@ -590,7 +590,7 @@ class UnifiedApp:
                 self.df.to_csv(file_path, index=False)
                 metadata = {
                     "polygons": self.polygons,
-                    "predictions_datas": self.predictions_datas
+                    "predicted_labels": self.predicted_labels
                 }
                 with open(file_path.replace(".csv", "_metadata.json"), 'w') as f:
                     json.dump(metadata, f)
@@ -639,13 +639,13 @@ class UnifiedApp:
                 upload_to_blob(predictions_file,  sas_token, container,output_blob_folder)
                 log_message(f"Success: Uploaded {url_notoken}")
                 predictions_df = pd.read_csv(predictions_file)
-                prediction_counts = predictions_df['predictions_data'].value_counts().reset_index()
+                prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
                 prediction_counts.columns = ['class', 'count']
                 prediction_counts.to_csv(prediction_counts_path, index=False)
                 upload_to_blob(prediction_counts_path,  sas_token,container, output_blob_folder)
                 log_message(f"Success: counted {url_notoken}")
                 data = pd.read_csv(predictions_file)
-                data['category'] = data['predictions_data']
+                data['category'] = data['predicted_label']
                 unique_categories = data['category'].unique()
                 preset_colors = {
                     'rednano': 'red',

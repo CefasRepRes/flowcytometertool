@@ -231,14 +231,14 @@ class FileHandler(FileSystemEventHandler):
             log_message(f"Success: Predictions made for {file_path}")
 
             predictions_df = pd.read_csv(predictions_file)
-            prediction_counts = predictions_df['predictions_data'].value_counts().reset_index()
+            prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
             prediction_counts.columns = ['class', 'count']
             prediction_counts_path = predictions_file + "_counts.csv"
             prediction_counts.to_csv(prediction_counts_path, index=False)
             log_message(f"Success: counted {file_path}")
 
             data = pd.read_csv(predictions_file)
-            data['category'] = data['predictions_data']
+            data['category'] = data['predicted_label']
             unique_categories = data['category'].unique()
             preset_colors = {
                 'rednano': 'red',
@@ -287,9 +287,11 @@ class FileHandler(FileSystemEventHandler):
             plot3d_prediction_path = predictions_file + "_3d.html"
             pio.write_html(fig, file=plot3d_prediction_path, auto_open=False)
             log_message("Plot saved as '3D_Plot.html'.")
+            delete_file(listmode_file)
+            delete_file(json_file)
 #            delete_file(plot3d_prediction_path)
 #            delete_file(instrument_file)
-            delete_file(predictions_file)
+#            delete_file(predictions_file)
 #            delete_file(prediction_counts_path)
         except Exception as e:
             log_message(f"Error: An error occurred processing {file_path}: {e}")
@@ -365,11 +367,14 @@ def apply_python_model(listmode_file, predictions_file, model_path):
         # Ensure only required features are used
         print("Your model expects these columns:", features)
         print("Your data file has these columns:", df.columns.tolist())
-        df = df[features]
+        try:
+            df = df[features]
+        except:
+            print("Getting a not in index error? That means columns in this data file do not match those the model was trained on. Is this file from a different flow cytometer?")
         print("Predicting ...")
         # Classify data, predict the labels and probabilities
-        predictions = fitted_final_classifier.predict(df[features])
-        proba_predict = pd.DataFrame(fitted_final_classifier.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
+        predictions = model.predict(df[features])
+        proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
         predicted_data = df
         # Add prediction to original test table
         predicted_data['predicted_label'] = predictions 
@@ -681,11 +686,6 @@ def train_classifier(df, plots_dir, model_path):
     # Make the column names of this data frame the class names (instead of numbers)
     proba_predict = proba_predict.set_axis(classes, axis=1)
     # Bind both data frames by column
-    print(7)
-    print('predicted_data')
-    print(predicted_data)
-    print('proba_predict')
-    print(proba_predict)
     full_predicted = pd.concat([predicted_data, proba_predict], axis=1)
     # Save final predicted table
     #full_predicted.to_csv(predict_name)        
@@ -932,7 +932,7 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
 
 def plot3d(predictions_file):
     data = pd.read_csv(predictions_file)
-    data['category'] = data['predictions_data']
+    data['category'] = data['predicted_label']
     unique_categories = data['category'].unique()
 
     preset_colors = {
@@ -992,11 +992,11 @@ def summarize_predictions(df, pumped_volume):
     """Generate a summary of labelled and predicted data counts."""
     summary = []
     labels = df['label'].dropna().unique() if 'label' in df.columns else []
-    preds = df['predictions_data'].dropna().unique() if 'predictions_data' in df.columns else []
+    preds = df['predicted_label'].dropna().unique() if 'predicted_label' in df.columns else []
     all_classes = set(labels).union(preds)
     for cls in all_classes:
         label_count = (df['label'] == cls).sum() / pumped_volume if 'label' in df.columns else 0
-        pred_count = (df['predictions_data'] == cls).sum() / pumped_volume if 'predictions_data' in df.columns else 0
+        pred_count = (df['predicted_label'] == cls).sum() / pumped_volume if 'predicted_label' in df.columns else 0
         percent = (pred_count / label_count * 100) if label_count else 0
         summary.append((cls, label_count, pred_count, f"{percent:.2f}%"))
     return summary
