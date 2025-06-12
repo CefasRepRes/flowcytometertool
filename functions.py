@@ -1,4 +1,4 @@
-# functions file written whilst writing trainer_lucinda_version.py
+# functions file written whilst writing flow_cytometer_tool.py
 import requests
 import subprocess
 import os

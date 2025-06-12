@@ -30,7 +30,7 @@ Whilst tested on linux, I have only made pyinstaller builds of the software for 
 
 ## Compilation
 
-This was developed in miniforge3 prompt. You can download this to your machine and compile the program with the command "pyinstaller trainer_lucinda_version.spec"
+This was developed in miniforge3 prompt. You can download this to your machine and compile the program with the command "pyinstaller flow_cytometer_tool.spec"
 
 ## Github actions
 
