@@ -116,7 +116,7 @@ def test_classifier(df, model_path, nogui=False):
 
 def combine_csvs(output_path, expertise_matrix_path, nogui=False):
     if nogui:
-        zonechoices = "PELTIC"  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
+        zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
         zonechoices = choose_zone_folders(output_path)
 
