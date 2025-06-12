@@ -473,7 +473,7 @@ def loadClassifier(model_dir):
     raise FileNotFoundError("No model files found.")
   latest_model = max(model_files, key=os.path.getmtime)
   print('loding latest model:')
-  print(latest model)
+  print(latest_model)
   # Load the latest model
   fitted_final_classifier = joblib.load(latest_model)
   
