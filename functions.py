@@ -680,8 +680,6 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
             plt.close(fig)
 
 
-
-
 def train_classifier(df, plots_dir, model_path):
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
