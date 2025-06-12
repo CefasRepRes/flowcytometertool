@@ -1,0 +1,73 @@
+name: Build and Release on Version Tag
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-2022
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: 3.10.12
+        environment-file: environment.yml
+        activate-environment: flowcytometertool
+        auto-activate-base: false
+
+    - name: Install PyInstaller
+      shell: bash -l {0}
+      run: conda install -c conda-forge pyinstaller
+
+    - name: Build executable with PyInstaller
+      shell: bash -l {0}
+      run: pyinstaller flow_cytometer_tool.spec
+
+    - name: Upload executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: distributable
+        path: dist/**
+
+  run-linux-backend:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Miniconda
+      run: |
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+        bash miniconda.sh -b -p $HOME/miniconda
+        export PATH="$HOME/miniconda/bin:$PATH"
+        conda init bash
+        source $HOME/.bashrc  # Ensure the shell is reloaded
+
+    - name: Create Conda environment
+      run: |
+        conda env create -f environment.yml
+
+    - name: Run backend logic without GUI
+      run: |
+        source $HOME/miniconda/etc/profile.d/conda.sh
+        conda activate /usr/share/miniconda/envs/flowcytometertool
+        python flow_cytometer_tool.py --nogui
+
+    - name: Create release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: "Release ${{ github.ref }}"
+        draft: false
+        prerelease: false
