@@ -35,6 +35,26 @@ jobs:
       with:
         name: distributable
         path: dist/**
+        
+  upload-release-asset:
+    needs: [build-windows-exe, run-linux-backend]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: distributable
+        path: ./dist
+
+    - name: Upload release asset
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref }}
+        name: "Windows Executable"
+        files: ./dist/**
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   run-linux-backend:
     runs-on: ubuntu-24.04
