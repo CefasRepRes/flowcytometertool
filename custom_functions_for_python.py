@@ -465,7 +465,7 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
 
 ########################## Apply Supervised Classifier #########################
 
-def loadClassifier(model_path):
+def loadClassifier(model_dir):
   """Function to load the saved final supervised classifier and everything needed for prediction"""
   
   model_files = glob.glob(os.path.join(model_dir, "final_model_*.pkl"))
@@ -488,7 +488,7 @@ def predictPhyto(model_path, predict_name, data):
   """Function to predict phytoplankton class from a supervised classifier"""
   
   # Load classifier, unique class names and the features used in the pipeline (before feature selection)
-  fitted_final_classifier, classes, features = loadClassifier(model_path)
+  fitted_final_classifier, classes, features = loadClassifier(os.path.dirname(model_path))
   
   # Only keep the features used to fit the final model in the table to be predicted
   X = data[features]
@@ -517,7 +517,7 @@ def comparePrediction(data, preds_test, target_name, weight_name, report_filenam
   """Function to assess the generalization performance of the final model by comparing its predicted label of the test set to the manual labels"""
   
   # Load Classifier to get the class names
-  fitted_final_classifier, classes, features = loadClassifier(model_path)
+  fitted_final_classifier, classes, features = loadClassifier(os.path.dirname(model_path))
   
   # Get the manual labels
   y_test = data[target_name]
@@ -555,7 +555,7 @@ def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, 
   """Function to measure the permutation importance of the variables used in the final model"""
   
   # Load the model
-  fitted_final_classifier, classes, features = loadClassifier(model_path)
+  fitted_final_classifier, classes, features = loadClassifier(os.path.dirname(model_path))
   
   # Get the manual labels and the features table
   y = data[target_name]

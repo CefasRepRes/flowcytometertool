@@ -369,7 +369,7 @@ def to_listmode(json_file, listmode_file):
 
 def apply_python_model(listmode_file, predictions_file, model_path):
     try:
-        model, classes, features = loadClassifier(model_path)
+        model, classes, features = loadClassifier(os.path.dirname(model_path))
         df = pd.read_csv(listmode_file)
         df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
         df = df.dropna()
@@ -713,7 +713,7 @@ def train_classifier(df, plots_dir, model_path):
     )
 
     # Evaluate on test set
-    model, classes, features = loadClassifier(model_path)
+    model, classes, features = loadClassifier(os.path.dirname(model_path))
     test_df_filtered=test_df[features]
     predictions = model.predict(test_df_filtered)
     proba_predict = pd.DataFrame(model.predict_proba(test_df_filtered)) # compute class prediction probabilities and store in data frame
@@ -752,7 +752,7 @@ def train_classifier(df, plots_dir, model_path):
         print(f"Could not plot CV results: {e}")
 
 def test_model(df, model_path):
-    model, classes, features = loadClassifier(model_path)
+    model, classes, features = loadClassifier(os.path.dirname(model_path))
     df=df[features]
     predictions = model.predict(df[features])
     proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame
