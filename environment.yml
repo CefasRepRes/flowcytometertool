@@ -16,6 +16,7 @@ dependencies:
   - wheel=0.45.1
   - xz=5.2.6
   - pip:
+      - joblib==1.4.2
       - requests==2.31.0
       - Pillow==9.4.0
       - statistics

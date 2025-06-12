@@ -570,20 +570,44 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
     return combined_df
 
 
-def plot_cv_results(cv_results,plots_dir):
+def plot_cv_results(cv_results, plots_dir):
     plotlist = []
-    best_results = cv_results[cv_results['iter'] == cv_results['iter'].max()].groupby(['param_classifier', 'outer_splits']).apply(lambda x: x.loc[x['mean_test_score'].idxmax()])
-
+    best_results = cv_results[cv_results['iter'] == cv_results['iter'].max()].groupby(
+        ['param_classifier', 'outer_splits']
+    ).apply(lambda x: x.loc[x['mean_test_score'].idxmax()])
     for outer in cv_results['outer_splits'].unique():
-        outer_score = round(cv_results[cv_results['outer_splits'] == outer]['outer_split_test_score'].unique()[0], 3)
-        best_params = best_results[best_results['outer_splits'] == outer][['param_classifier','param_classifier__learning_rate','param_classifier__max_depth','param_classifier__max_features','param_classifier__C','param_classifier__l1_ratio','param_classifier__max_samples']].values[0]
+        outer_data = cv_results[cv_results['outer_splits'] == outer]
+        outer_score = round(outer_data['outer_split_test_score'].unique()[0], 3)
+        best_params = best_results[best_results['outer_splits'] == outer][[
+            'param_classifier',
+            'param_classifier__learning_rate',
+            'param_classifier__max_depth',
+            'param_classifier__max_features',
+            'param_classifier__C',
+            'param_classifier__l1_ratio',
+            'param_classifier__max_samples'
+        ]].values[0]
         fig, ax = plt.subplots(figsize=(12, 8))
-        sns.lineplot(data=cv_results[cv_results['outer_splits'] == outer], x='iter', y='mean_test_score', hue='param_classifier', marker='o', ax=ax)
-        ax.set_title(f"Outer split {outer}"); ax.set_xlabel("Iteration"); ax.set_ylabel("MCC"); ax.tick_params(axis='x', rotation=45); ax.legend(title="Classifier")
-        fig.text(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\\nOuter CV test score : {outer_score}", wrap=True, horizontalalignment='center', fontsize=10)
-        fig.tight_layout(); fig.savefig(os.path.join(plots_dir, f'cv_results_outer_{outer}.png')); plt.close(fig); plotlist.append(fig)
-
+        sns.lineplot(data=outer_data, x='iter', y='mean_test_score', hue='param_classifier', marker='o', ax=ax)
+        # Compute and plot delta MCC
+        for classifier in outer_data['param_classifier'].unique():
+            clf_data = outer_data[outer_data['param_classifier'] == classifier].sort_values('iter')
+            clf_data['delta_mcc'] = clf_data['mean_test_score'].diff()
+            sns.lineplot(data=clf_data, x='iter', y='delta_mcc', label=f"{classifier} ΔMCC", linestyle='--', ax=ax)
+        ax.set_title(f"Outer split {outer}")
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("MCC and ΔMCC")
+        ax.tick_params(axis='x', rotation=45)
+        ax.legend(title="Classifier")
+        fig.text(0.5, -0.1, f"Best Classifier (used in outer CV) : {best_params}\nOuter CV test score : {outer_score}",
+                 wrap=True, horizontalalignment='center', fontsize=10)
+        fig.tight_layout()
+        fig.savefig(os.path.join(plots_dir, f'cv_results_outer_{outer}.png'))
+        plt.close(fig)
+        plotlist.append(fig)
     return plotlist
+
+
 
 def plot_classifier_props(cv_results):
     plotlist = []
@@ -656,8 +680,6 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
             plt.close(fig)
 
 
-
-
 def train_classifier(df, plots_dir, model_path):
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
@@ -681,7 +703,9 @@ def train_classifier(df, plots_dir, model_path):
         filename_learningCurve=os.path.join(os.path.dirname(model_path),"learning_curve" + os.path.basename(model_path) + ".csv"),
         filename_finalFittedModel=model_path,
         filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
-        validation_set = test_df       
+        filename_importance = os.path.join(os.path.dirname(model_path), "permutation_importance_" + os.path.basename(model_path) + ".csv"),
+        validation_set = test_df,
+        plots_dir = plots_dir        
     )
 
     # Evaluate on test set
@@ -1022,7 +1046,7 @@ def run_backend_only():
     model_dir = os.path.join(tool_dir, "models")
     plots_dir = os.path.join(tool_dir, "plots")
     model_path = os.path.join(model_dir, "final_model.pkl")
-
+    os.makedirs(plots_dir, exist_ok=True)
     os.makedirs(download_path, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
 

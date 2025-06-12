@@ -550,7 +550,7 @@ def getFinalResults(fitted_final_classifier):
   print(f"The final Classifier is : \n {fitted_final_classifier}")
 
 
-def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve):
+def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve, filename_importance, plots_dir):
   """Function that runs the entire supervised classifier building process by calling the other custom functions"""
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
@@ -573,7 +573,21 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
   
   # Build and save the learning curve
   buildLearningCurve(n_sizes, cores, filename_learningCurve, fitted_final_classifier, training_set, target_name, group_name, weight_name, rng)
-  
+
+
+  # Compute permutation importance
+  scorer = make_scorer(matthews_corrcoef).set_score_request(sample_weight=True)
+  getPermutationImportance(
+    data=training_set,
+    nb_repeats=10,
+    target_name="source_label",
+    weight_name="weight",
+    cores=cores,
+    filename_importance=filename_importance,
+    model_path=filename_finalFittedModel,
+    scorer=scorer,
+    plots_path = plots_dir
+  )  
   # Calibrate the classifier
   calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
 
@@ -654,13 +668,32 @@ def comparePrediction(data, preds_test, target_name, weight_name, report_filenam
   # Save confusion matrix as csv
   cm.to_csv(cm_filename)
 
-# Not implemented
-def predictTestSet(self,model_path, predict_name, data, target_name, weight_name,  cm_filename, report_filename, text_file):
-  """Function to predict the test set specifically, calls two other custom function for prediction and comparison to manual labels"""
-  preds_test, self.df = predictPhyto(model_path, predict_name, data)
-  comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path)
+def predictTestSet(self, model_path, predict_name, data, target_name, weight_name, cm_filename, report_filename, text_file):
+    preds_test, predicted_df = predictPhyto(model_path, predict_name, data)
+    if self is not None:
+        self.df = predicted_df
+    comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path)
 
-def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance):
+
+
+# def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance, model_path, scorer):
+    # """Function to measure the permutation importance of the variables used in the final model"""
+    # fitted_final_classifier, classes, features = loadClassifier(model_path)
+    # y = data[target_name]
+    # X = data[features]
+    # sample_weights = data[weight_name]
+    # rng = np.random.RandomState(42)
+    # cores = int(cores)
+    # sklearn.set_config(enable_metadata_routing=True)
+    # print('Computation of Permutation Importance... \n')
+    # permutation = permutation_importance(estimator=fitted_final_classifier, X=X, y=y, scoring=scorer, n_repeats=nb_repeats, n_jobs=cores, random_state=rng, sample_weight=sample_weights)
+    # print('Done ! Saving results ...')
+    # sorted_importances_idx = permutation.importances_mean.argsort()
+    # importances = pd.DataFrame(permutation.importances[sorted_importances_idx].T, columns=X.columns[sorted_importances_idx])
+    # importances.to_csv(filename_importance)
+    # print('Permutation Importance results saved ! \n')
+
+def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance, model_path, scorer, plots_path):
   """Function to measure the permutation importance of the variables used in the final model"""
   
   # Load the model
@@ -691,6 +724,26 @@ def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, 
   importances = pd.DataFrame(permutation.importances[sorted_importances_idx].T, columns=X.columns[sorted_importances_idx])
   importances.to_csv(filename_importance)
   print("Permutation Importance results saved ! \n")
+
+  df_t = importances.T
+  df_t.columns = [f"repeat_{i}" for i in range(df_t.shape[1])]
+  df_t["mean_importance"] = df_t.mean(axis=1)
+  df_t["std_importance"] = df_t.std(axis=1)
+
+  # Sort and select top 10
+  top_features = df_t.sort_values(by="mean_importance", ascending=False).head(10)
+
+  # Plot
+  plt.figure(figsize=(10, 8))
+  plt.barh(top_features.index, top_features["mean_importance"], xerr=top_features["std_importance"], color="skyblue")
+  plt.xlabel("Mean Permutation Importance")
+  plt.title("Top 10 Features by Permutation Importance")
+  plt.gca().invert_yaxis()
+  plt.tight_layout()
+  plot_filename = plots_path+"top10.png"
+  plt.savefig(plot_filename)
+  #plt.show()
+
 
 
 def getSelectedFeatures(model_path):
