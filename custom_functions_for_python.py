@@ -468,11 +468,12 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
 def loadClassifier(model_dir):
   """Function to load the saved final supervised classifier and everything needed for prediction"""
   
-  model_files = glob.glob(os.path.join(model_dir, "final_model_*.pkl"))
+  model_files = glob.glob(os.path.join(model_dir, "*.pkl"))
   if not model_files:
     raise FileNotFoundError("No model files found.")
   latest_model = max(model_files, key=os.path.getmtime)
-  
+  print('loding latest model:')
+  print(latest model)
   # Load the latest model
   fitted_final_classifier = joblib.load(latest_model)
   
