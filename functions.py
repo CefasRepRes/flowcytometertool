@@ -685,7 +685,11 @@ def train_classifier(df, plots_dir, model_path):
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
-    cores = 1 if is_frozen else os.cpu_count()
+    # Detect if running on Linux
+    is_linux = platform.system().lower() == "linux"
+    # Set cores to 1 if on Linux (to avoid joblib memory leak from actions workflow) or frozen executable which similarly does not seem to work parallelised
+    cores = 1 if is_frozen or is_linux else os.cpu_count()
+
     
     # Split the data
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, stratify=cleaned_df["source_label"], random_state=42)
