@@ -37,138 +37,6 @@ import joblib
 
 ######################## Supervised Classifier Building ########################
 
-column_rename_map_from_copilot = {
-	'FWS_length': 'FWS_Length',
-	'FWS_total': 'FWS_Total',
-	'FWS_maximum': 'FWS_Maximum',
-	'FWS_average': 'FWS_Average',
-	'FWS_inertia': 'FWS_Inertia',
-	'FWS_centreOfGravity': 'FWS_Center_of_gravity',
-	'FWS_fillFactor': 'FWS_Fill_factor',
-	'FWS_asymmetry': 'FWS_Asymmetry',
-	'FWS_numberOfCells': 'FWS_Number_of_cells',
-	'FWS_sampleLength': 'Sample_Length',
-	'FWS_timeOfArrival': 'Arrival_Time',
-	'FWS_first': 'FWS_First',
-	'FWS_last': 'FWS_Last',
-	'FWS_minimum': 'FWS_Minimum',
-	'FWS_swscov': 'FWS_SWS_covariance',
-	'FWS_variableLength': 'FWS_Length(50%)',
-	'Sidewards_Scatter_length': 'Sidewards_Scatter_Length',
-	'Sidewards_Scatter_total': 'Sidewards_Scatter_Total',
-	'Sidewards_Scatter_maximum': 'Sidewards_Scatter_Maximum',
-	'Sidewards_Scatter_average': 'Sidewards_Scatter_Average',
-	'Sidewards_Scatter_inertia': 'Sidewards_Scatter_Inertia',
-	'Sidewards_Scatter_centreOfGravity': 'Sidewards_Scatter_Center_of_gravity',
-	'Sidewards_Scatter_fillFactor': 'Sidewards_Scatter_Fill_factor',
-	'Sidewards_Scatter_asymmetry': 'Sidewards_Scatter_Asymmetry',
-	'Sidewards_Scatter_numberOfCells': 'Sidewards_Scatter_Number_of_cells',
-	'Sidewards_Scatter_sampleLength': 'Sidewards_Scatter_Length(50%)',
-	'Sidewards_Scatter_timeOfArrival': 'Sidewards_Scatter_Arrival_Time',
-	'Sidewards_Scatter_first': 'Sidewards_Scatter_First',
-	'Sidewards_Scatter_last': 'Sidewards_Scatter_Last',
-	'Sidewards_Scatter_minimum': 'Sidewards_Scatter_Minimum',
-	'Sidewards_Scatter_swscov': 'Sidewards_Scatter_SWS_covariance',
-	'Sidewards_Scatter_variableLength': 'Sidewards_Scatter_varLength(50%)',
-	'Fl_Yellow_length': 'Fl_Yellow_Length',
-	'Fl_Yellow_total': 'Fl_Yellow_total',
-	'Fl_Yellow_maximum': 'Fl_Yellow_Maximum',
-	'Fl_Yellow_average': 'Fl_Yellow_Average',
-	'Fl_Yellow_inertia': 'Fl_Yellow_Inertia',
-	'Fl_Yellow_centreOfGravity': 'Fl_Yellow_Center_of_gravity',
-	'Fl_Yellow_fillFactor': 'Fl_Yellow_Fill_factor',
-	'Fl_Yellow_asymmetry': 'Fl_Yellow_Asymmetry',
-	'Fl_Yellow_numberOfCells': 'Fl_Yellow_Number_of_cells',
-	'Fl_Yellow_sampleLength': 'Fl_Yellow_Length(50%)',
-	'Fl_Yellow_timeOfArrival': 'Fl_Yellow_Arrival_Time',
-	'Fl_Yellow_first': 'Fl_Yellow_First',
-	'Fl_Yellow_last': 'Fl_Yellow_Last',
-	'Fl_Yellow_minimum': 'Fl_Yellow_Minimum',
-	'Fl_Yellow_swscov': 'Fl_Yellow_SWS_covariance',
-	'Fl_Yellow_variableLength': 'Fl_Yellow_varLength(50%)',
-	'Fl_Orange_length': 'Fl_Orange_Length',
-	'Fl_Orange_total': 'Fl_Orange_total',
-	'Fl_Orange_maximum': 'Fl_Orange_Maximum',
-	'Fl_Orange_average': 'Fl_Orange_Average',
-	'Fl_Orange_inertia': 'Fl_Orange_Inertia',
-	'Fl_Orange_centreOfGravity': 'Fl_Orange_Center_of_gravity',
-	'Fl_Orange_fillFactor': 'Fl_Orange_Fill_factor',
-	'Fl_Orange_asymmetry': 'Fl_Orange_Asymmetry',
-	'Fl_Orange_numberOfCells': 'Fl_Orange_Number_of_cells',
-	'Fl_Orange_sampleLength': 'Fl_Orange_Length(50%)',
-	'Fl_Orange_timeOfArrival': 'Fl_Orange_Arrival_Time',
-	'Fl_Orange_first': 'Fl_Orange_First',
-	'Fl_Orange_last': 'Fl_Orange_Last',
-	'Fl_Orange_minimum': 'Fl_Orange_Minimum',
-	'Fl_Orange_swscov': 'Fl_Orange_SWS_covariance',
-	'Fl_Orange_variableLength': 'Fl_Orange_varLength(50%)',
-	'Fl_Red_length': 'Fl_Red_Length',
-	'Fl_Red_total': 'Fl_Red_total',
-	'Fl_Red_maximum': 'Fl_Red_Maximum',
-	'Fl_Red_average': 'Fl_Red_Average',
-	'Fl_Red_inertia': 'Fl_Red_Inertia',
-	'Fl_Red_centreOfGravity': 'Fl_Red_Center_of_gravity',
-	'Fl_Red_fillFactor': 'Fl_Red_Fill_factor',
-	'Fl_Red_asymmetry': 'Fl_Red_Asymmetry',
-	'Fl_Red_numberOfCells': 'Fl_Red_Number_of_cells',
-	'Fl_Red_sampleLength': 'Fl_Red_Length(50%)',
-	'Fl_Red_timeOfArrival': 'Fl_Red_Arrival_Time',
-	'Fl_Red_first': 'Fl_Red_First',
-	'Fl_Red_last': 'Fl_Red_Last',
-	'Fl_Red_minimum': 'Fl_Red_Minimum',
-	'Fl_Red_swscov': 'Fl_Red_SWS_covariance',
-	'Fl_Red_variableLength': 'Fl_Red_varLength(50%)',
-	'Curvature_length': 'Curvature_Length',
-	'Curvature_total': 'Curvature_Total',
-	'Curvature_maximum': 'Curvature_Maximum',
-	'Curvature_average': 'Curvature_Average',
-	'Curvature_inertia': 'Curvature_Inertia',
-	'Curvature_centreOfGravity': 'Curvature_Center_of_gravity',
-	'Curvature_fillFactor': 'Curvature_Fill_factor',
-	'Curvature_asymmetry': 'Curvature_Asymmetry',
-	'Curvature_numberOfCells': 'Curvature_Number_of_cells',
-	'Curvature_sampleLength': 'Curvature_Length(50%)',
-	'Curvature_timeOfArrival': 'Curvature_Arrival_Time',
-	'Curvature_first': 'Curvature_First',
-	'Curvature_last': 'Curvature_Last',
-	'Curvature_minimum': 'Curvature_Minimum',
-	'Curvature_swscov': 'Curvature_SWS_covariance',
-	'Curvature_variableLength': 'Curvature_varLength(50%)',
-	'Forward_Scatter_Left_length': 'Forward_Scatter_Left_Length',
-	'Forward_Scatter_Left_total': 'Forward_Scatter_Left_Total',
-	'Forward_Scatter_Left_maximum': 'Forward_Scatter_Left_Maximum',
-	'Forward_Scatter_Left_average': 'Forward_Scatter_Left_Average',
-	'Forward_Scatter_Left_inertia': 'Forward_Scatter_Left_Inertia',
-	'Forward_Scatter_Left_centreOfGravity': 'Forward_Scatter_Left_Center_of_gravity',
-	'Forward_Scatter_Left_fillFactor': 'Forward_Scatter_Left_Fill_factor',
-	'Forward_Scatter_Left_asymmetry': 'Forward_Scatter_Left_Asymmetry',
-	'Forward_Scatter_Left_numberOfCells': 'Forward_Scatter_Left_Number_of_cells',
-	'Forward_Scatter_Left_sampleLength': 'Forward_Scatter_Left_Length(50%)',
-	'Forward_Scatter_Left_timeOfArrival': 'Forward_Scatter_Left_Arrival_Time',
-	'Forward_Scatter_Left_first': 'Forward_Scatter_Left_First',
-	'Forward_Scatter_Left_last': 'Forward_Scatter_Left_Last',
-	'Forward_Scatter_Left_minimum': 'Forward_Scatter_Left_Minimum',
-	'Forward_Scatter_Left_swscov': 'Forward_Scatter_Left_SWS_covariance',
-	'Forward_Scatter_Left_variableLength': 'Forward_Scatter_Left_varLength(50%)',
-	'Forward_Scatter_Right_length': 'Forward_Scatter_Right_Length',
-	'Forward_Scatter_Right_total': 'Forward_Scatter_Right_Total',
-	'Forward_Scatter_Right_maximum': 'Forward_Scatter_Right_Maximum',
-	'Forward_Scatter_Right_average': 'Forward_Scatter_Right_Average',
-	'Forward_Scatter_Right_inertia': 'Forward_Scatter_Right_Inertia',
-	'Forward_Scatter_Right_centreOfGravity': 'Forward_Scatter_Right_Center_of_gravity',
-	'Forward_Scatter_Right_fillFactor': 'Forward_Scatter_Right_Fill_factor',
-	'Forward_Scatter_Right_asymmetry': 'Forward_Scatter_Right_Asymmetry',
-	'Forward_Scatter_Right_numberOfCells': 'Forward_Scatter_Right_Number_of_cells',
-	'Forward_Scatter_Right_sampleLength': 'Forward_Scatter_Right_Length(50%)',
-	'Forward_Scatter_Right_timeOfArrival': 'Forward_Scatter_Right_Arrival_Time',
-	'Forward_Scatter_Right_first': 'Forward_Scatter_Right_First',
-	'Forward_Scatter_Right_last': 'Forward_Scatter_Right_Last',
-	'Forward_Scatter_Right_minimum': 'Forward_Scatter_Right_Minimum',
-	'Forward_Scatter_Right_swscov': 'Forward_Scatter_Right_SWS_covariance',
-	'Forward_Scatter_Right_variableLength': 'Forward_Scatter_Right_varLength(50%)'
-}
-
-
 def splitTrainingSet(training_set, target_name, group_name, weight_name):
     """
     Splits the training set into three objects:
@@ -472,6 +340,9 @@ def calibrateClassifier(fitted_final_classifier, validation_set, target_name, gr
   
   print("Done ! Saving calibrated classifier ...")
   
+  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+  filename_finalCalibratedModel = os.path.join(model_dir, f"final_model_{timestamp}.pkl")
+  
   joblib.dump(fitted_calibrated_classifier, filename_finalCalibratedModel)
   
   calibration_stop_time = time() - calibration_start_time
@@ -597,8 +468,13 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
 def loadClassifier(model_path):
   """Function to load the saved final supervised classifier and everything needed for prediction"""
   
-  # Load the model
-  fitted_final_classifier = joblib.load(model_path)
+  model_files = glob.glob(os.path.join(model_dir, "final_model_*.pkl"))
+  if not model_files:
+    raise FileNotFoundError("No model files found.")
+  latest_model = max(model_files, key=os.path.getmtime)
+  
+  # Load the latest model
+  fitted_final_classifier = joblib.load(latest_model)
   
   # Get unique class names
   classes = fitted_final_classifier['classifier'].classes_
@@ -674,24 +550,6 @@ def predictTestSet(self, model_path, predict_name, data, target_name, weight_nam
         self.df = predicted_df
     comparePrediction(data, preds_test, target_name, weight_name, report_filename, cm_filename, model_path)
 
-
-
-# def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance, model_path, scorer):
-    # """Function to measure the permutation importance of the variables used in the final model"""
-    # fitted_final_classifier, classes, features = loadClassifier(model_path)
-    # y = data[target_name]
-    # X = data[features]
-    # sample_weights = data[weight_name]
-    # rng = np.random.RandomState(42)
-    # cores = int(cores)
-    # sklearn.set_config(enable_metadata_routing=True)
-    # print('Computation of Permutation Importance... \n')
-    # permutation = permutation_importance(estimator=fitted_final_classifier, X=X, y=y, scoring=scorer, n_repeats=nb_repeats, n_jobs=cores, random_state=rng, sample_weight=sample_weights)
-    # print('Done ! Saving results ...')
-    # sorted_importances_idx = permutation.importances_mean.argsort()
-    # importances = pd.DataFrame(permutation.importances[sorted_importances_idx].T, columns=X.columns[sorted_importances_idx])
-    # importances.to_csv(filename_importance)
-    # print('Permutation Importance results saved ! \n')
 
 def getPermutationImportance(data, nb_repeats, target_name, weight_name, cores, filename_importance, model_path, scorer, plots_path):
   """Function to measure the permutation importance of the variables used in the final model"""
