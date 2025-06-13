@@ -33,7 +33,7 @@ class UnifiedApp:
         self.root.geometry("1800x1000")
         self.tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
         self.download_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
-        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'extraction/')
+        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         model_dir = os.path.join(self.tool_dir, "models")
