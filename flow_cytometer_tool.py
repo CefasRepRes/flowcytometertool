@@ -187,17 +187,15 @@ class UnifiedApp:
         except Exception as e:
             print(f"Installation Error: Failed to install requirements: {e}")
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
-        # Only run this on Windows
+        # Only run this on Windows as linux should already have it installed
         if platform.system().lower() == "windows":
             try:
-                dotnet_url = "https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.411-windows-x64-installer"
-                installer_path = os.path.join(os.getenv("TEMP"), "dotnet-sdk-8.0.411-win-x64.exe")
-                urllib.request.urlretrieve(dotnet_url, installer_path)
-                subprocess.Popen([installer_path], shell=True)
-                messagebox.showinfo("Info", "Launching .NET SDK installer. Please follow the on-screen instructions.")
+                subprocess.Popen(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
+                messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
             except Exception as e:
-                print(f"Failed to download or run .NET installer: {e}")
-                messagebox.showerror("Error", f"Failed to launch .NET installer:\n{e}")
+                print(f"Failed to launch .NET SDK installation via winget: {e}")
+                messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
+
 
 
     def create_widgets(self):
