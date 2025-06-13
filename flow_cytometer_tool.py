@@ -190,8 +190,8 @@ class UnifiedApp:
         # Only run this on Windows
         if platform.system().lower() == "windows":
             try:
-                dotnet_url = "https://download.visualstudio.microsoft.com/download/pr/6c3e3b7e-0c3e-4a3f-8b2e-5f3f3c6b5b3e/3f4f3b3e3f3e3f3e3f3e3f3e3f3e3f3e/dotnet-sdk-8.0.411-win-x64.exe"
-                installer_path = os.path.join(os.getenv("TEMP"), "dotnet-sdk-installer.exe")
+                dotnet_url = "https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/sdk-8.0.411-windows-x64-installer"
+                installer_path = os.path.join(os.getenv("TEMP"), "dotnet-sdk-8.0.411-win-x64.exe")
                 urllib.request.urlretrieve(dotnet_url, installer_path)
                 subprocess.Popen([installer_path], shell=True)
                 messagebox.showinfo("Info", "Launching .NET SDK installer. Please follow the on-screen instructions.")
