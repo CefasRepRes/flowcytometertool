@@ -197,7 +197,7 @@ class UnifiedApp:
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
         if platform.system().lower() == "windows":
             try:
-                subprocess.Popen(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
+                subprocess.run(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
                 messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
                 # Notify user that the app must be restarted
                 should_exit = messagebox.askokcancel(
