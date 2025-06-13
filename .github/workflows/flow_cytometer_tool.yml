@@ -37,7 +37,7 @@ jobs:
         path: dist/**
         
   upload-release-asset:
-    needs: [build-windows-exe, run-linux-backend]
+    needs: [build-windows-exe]
     runs-on: ubuntu-latest
 
     steps:
