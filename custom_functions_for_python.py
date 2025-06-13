@@ -342,7 +342,7 @@ def calibrateClassifier(fitted_final_classifier, validation_set, target_name, gr
   print("Done ! Saving calibrated classifier ...")
   
   timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-  filename_finalCalibratedModel = os.path.join(filename_finalCalibratedModel, f"final_model_{timestamp}.pkl")
+  filename_finalCalibratedModel = os.path.join(os.path.dirname(filename_finalCalibratedModel), f"final_model_{timestamp}.pkl")
   
   joblib.dump(fitted_calibrated_classifier, filename_finalCalibratedModel)
   
