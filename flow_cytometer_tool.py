@@ -24,6 +24,9 @@ from functions import *
 import threading
 import time
 from PIL import Image, ImageTk
+import platform
+import urllib.request
+
 #import multiprocessing
 
 class UnifiedApp:
@@ -184,6 +187,18 @@ class UnifiedApp:
         except Exception as e:
             print(f"Installation Error: Failed to install requirements: {e}")
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
+        # Only run this on Windows
+        if platform.system().lower() == "windows":
+            try:
+                dotnet_url = "https://download.visualstudio.microsoft.com/download/pr/6c3e3b7e-0c3e-4a3f-8b2e-5f3f3c6b5b3e/3f4f3b3e3f3e3f3e3f3e3f3e3f3e3f3e/dotnet-sdk-8.0.411-win-x64.exe"
+                installer_path = os.path.join(os.getenv("TEMP"), "dotnet-sdk-installer.exe")
+                urllib.request.urlretrieve(dotnet_url, installer_path)
+                subprocess.Popen([installer_path], shell=True)
+                messagebox.showinfo("Info", "Launching .NET SDK installer. Please follow the on-screen instructions.")
+            except Exception as e:
+                print(f"Failed to download or run .NET installer: {e}")
+                messagebox.showerror("Error", f"Failed to launch .NET installer:\n{e}")
+
 
     def create_widgets(self):
         #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
