@@ -445,12 +445,14 @@ class UnifiedApp:
         tk.Button(self.tab_process_blob, text="Generate Mixfile", command=self.generate_mixfile).pack(pady=5)
         tk.Button(self.tab_process_blob, text="Process All", command=self.process_all).pack(pady=10)
 
-
-
     def download_blob_directory(self):
         try:
-            sas_token_path = self.sas_token_entry.get().strip()
-            sas_token = get_sas_token(sas_token_path)
+            try:
+                sas_token_path = self.sas_token_entry.get().strip()
+                sas_token = get_sas_token(sas_token_path)
+            except Exception as e:
+                messagebox.showerror("Token Error", f"Unable to load data access authentication token from the path given in 'blob tools' tab, you can ignore this error if you are using the Cefas public blob folder 'exampledata': {e}")            
+                sas_token = ''
             blob_url = self.url_entry.get()
             if blob_url == "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/":
                 download_blobs(blob_url, self.download_path) # Pass no authentication for this folder, it is public data and actually by passing the key for another folder you get an error for this public folder
