@@ -47,12 +47,20 @@ jobs:
         name: distributable
         path: ./artifact
 
+    - name: List downloaded files
+      run: ls -R ./artifact
+
+    - name: Zip distributable
+      run: |
+        cd artifact
+        zip -r ../distributable.zip ./*
+
     - name: Upload release asset
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref }}
         name: "Windows Executable"
-        files: ./artifact/distributable.zip
+        files: distributable.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
