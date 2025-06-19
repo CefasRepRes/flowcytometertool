@@ -57,8 +57,11 @@ else:
 
 expertise_matrix_path = os.path.join(base_path, "expertise_matrix.csv")
 
+def stratified_subsample(df, target_column, max_per_class=1000):
+    return df.groupby(target_column, group_keys=False).apply(lambda x: x.sample(min(len(x), max_per_class), random_state=42)).reset_index(drop=True)
 
-def train_model(df, plots_dir, model_path, nogui=False, self = None):
+
+def train_model(df, plots_dir, model_path, nogui=False, self = None, max_per_class = 100000):
     try:
         if df is None:
             if nogui:
@@ -67,7 +70,7 @@ def train_model(df, plots_dir, model_path, nogui=False, self = None):
                 from tkinter import messagebox
                 messagebox.showerror("Error", "No data to train on.")
             return
-        train_classifier(df, plots_dir, model_path)
+        train_classifier(df, plots_dir, model_path, max_per_class)
         if nogui:
             print("Model training completed successfully.")
         else:
@@ -680,7 +683,9 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
             plt.close(fig)
 
 
-def train_classifier(df, plots_dir, model_path):
+
+def train_classifier(df, plots_dir, model_path, max_per_class):
+    df = stratified_subsample(df, target_column="source_label", max_per_class=max_per_class)
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
     # Detect if running from PyInstaller bundle
@@ -1081,7 +1086,8 @@ def run_backend_only():
 
         # 6. Train Model
         print("🤖 Training model...")
-        train_model(df, plots_dir, model_path, nogui=True, self = None)
+        
+        train_model(df, plots_dir, model_path, nogui=True, self = None, max_per_class = 1000)
     
         # 7. Predict Test Set using updated function
         print("🧪 Predicting test set...")

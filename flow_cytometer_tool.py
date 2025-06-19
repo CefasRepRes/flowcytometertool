@@ -387,7 +387,11 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
-        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, nogui=False, self = self)).pack(pady=5)
+        tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
+        self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
+        self.max_per_class_entry.insert(0, "100000")
+        self.max_per_class_entry.pack(pady=5)
+        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, nogui=False, self = self, max_per_class = int(self.max_per_class_entry.get()))).pack(pady=5)
         tk.Button(self.tab_download, text="Predict Test Set", command=self.handle_predict_test_set).pack(pady=5)
         self.build_expertise_matrix_editor(self.tab_download)
 
