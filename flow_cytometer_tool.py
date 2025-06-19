@@ -24,6 +24,9 @@ from functions import *
 import threading
 import time
 from PIL import Image, ImageTk
+import platform
+import urllib.request
+
 #import multiprocessing
 
 class UnifiedApp:
@@ -33,7 +36,7 @@ class UnifiedApp:
         self.root.geometry("1800x1000")
         self.tool_dir = os.path.expanduser("~/Documents/flowcytometertool/")
         self.download_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
-        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'extraction/')
+        self.output_path = os.path.join(os.path.expanduser("~/Documents/flowcytometertool"), 'downloadeddata/')
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         model_dir = os.path.join(self.tool_dir, "models")
@@ -184,6 +187,31 @@ class UnifiedApp:
         except Exception as e:
             print(f"Installation Error: Failed to install requirements: {e}")
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
+        # Only run this on Windows as linux should already have it installed
+        if platform.system().lower() == "windows":
+            try:
+                subprocess.Popen(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
+                messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
+            except Exception as e:
+                print(f"Failed to launch .NET SDK installation via winget: {e}")
+                messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
+        if platform.system().lower() == "windows":
+            try:
+                subprocess.run(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
+                messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
+                # Notify user that the app must be restarted
+                should_exit = messagebox.askokcancel(
+                    "Restart Required",
+                    "To complete the installation, this application must now close after the .NET SDK installation.\n\n"
+                    "Please reopen the app."
+                )
+                if should_exit:
+                    self.root.destroy()
+            except Exception as e:
+                print(f"Failed to launch .NET SDK installation via winget: {e}")
+                messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
+
+
 
     def create_widgets(self):
         #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
@@ -445,12 +473,14 @@ class UnifiedApp:
         tk.Button(self.tab_process_blob, text="Generate Mixfile", command=self.generate_mixfile).pack(pady=5)
         tk.Button(self.tab_process_blob, text="Process All", command=self.process_all).pack(pady=10)
 
-
-
     def download_blob_directory(self):
         try:
-            sas_token_path = self.sas_token_entry.get().strip()
-            sas_token = get_sas_token(sas_token_path)
+            try:
+                sas_token_path = self.sas_token_entry.get().strip()
+                sas_token = get_sas_token(sas_token_path)
+            except Exception as e:
+                messagebox.showerror("Token Error", f"Unable to load data access authentication token from the path given in 'blob tools' tab, you can ignore this error if you are using the Cefas public blob folder 'exampledata': {e}")            
+                sas_token = ''
             blob_url = self.url_entry.get()
             if blob_url == "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/":
                 download_blobs(blob_url, self.download_path) # Pass no authentication for this folder, it is public data and actually by passing the key for another folder you get an error for this public folder

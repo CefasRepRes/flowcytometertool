@@ -9,7 +9,6 @@ from matplotlib.widgets import PolygonSelector
 from matplotlib.path import Path
 import json
 
-
 plot_area = None
 color_key = None
 df = None  

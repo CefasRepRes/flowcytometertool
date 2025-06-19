@@ -116,7 +116,7 @@ def test_classifier(df, model_path, nogui=False):
 
 def combine_csvs(output_path, expertise_matrix_path, nogui=False):
     if nogui:
-        zonechoices = "PELTIC"  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
+        zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
         zonechoices = choose_zone_folders(output_path)
 
@@ -369,7 +369,7 @@ def to_listmode(json_file, listmode_file):
 
 def apply_python_model(listmode_file, predictions_file, model_path):
     try:
-        model, classes, features = loadClassifier(model_path)
+        model, classes, features = loadClassifier(os.path.dirname(model_path))
         df = pd.read_csv(listmode_file)
         df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
         df = df.dropna()
@@ -685,7 +685,11 @@ def train_classifier(df, plots_dir, model_path):
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
-    cores = 1 if is_frozen else os.cpu_count()
+    # Detect if running on Linux
+    is_linux = platform.system().lower() == "linux"
+    # Set cores to 1 if on Linux (to avoid joblib memory leak from actions workflow) or frozen executable which similarly does not seem to work parallelised
+    cores = 1 if is_frozen or is_linux else os.cpu_count()
+
     
     # Split the data
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, stratify=cleaned_df["source_label"], random_state=42)
@@ -709,7 +713,7 @@ def train_classifier(df, plots_dir, model_path):
     )
 
     # Evaluate on test set
-    model, classes, features = loadClassifier(model_path)
+    model, classes, features = loadClassifier(os.path.dirname(model_path))
     test_df_filtered=test_df[features]
     predictions = model.predict(test_df_filtered)
     proba_predict = pd.DataFrame(model.predict_proba(test_df_filtered)) # compute class prediction probabilities and store in data frame
@@ -748,7 +752,7 @@ def train_classifier(df, plots_dir, model_path):
         print(f"Could not plot CV results: {e}")
 
 def test_model(df, model_path):
-    model, classes, features = loadClassifier(model_path)
+    model, classes, features = loadClassifier(os.path.dirname(model_path))
     df=df[features]
     predictions = model.predict(df[features])
     proba_predict = pd.DataFrame(model.predict_proba(df[features])) # compute class prediction probabilities and store in data frame

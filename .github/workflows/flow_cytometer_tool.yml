@@ -28,13 +28,41 @@ jobs:
 
     - name: Build executable with PyInstaller
       shell: bash -l {0}
-      run: pyinstaller trainer_lucinda_version.spec
+      run: pyinstaller flow_cytometer_tool.spec
 
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
         name: distributable
         path: dist/**
+
+  upload-release-asset:
+    needs: [build-windows-exe]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: distributable
+        path: ./artifact
+
+    - name: List downloaded files
+      run: ls -R ./artifact
+
+    - name: Zip distributable
+      run: |
+        cd artifact
+        zip -r ../distributable.zip ./*
+
+    - name: Upload release asset
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref }}
+        name: "Windows Executable"
+        files: distributable.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   run-linux-backend:
     runs-on: ubuntu-24.04
@@ -59,15 +87,4 @@ jobs:
       run: |
         source $HOME/miniconda/etc/profile.d/conda.sh
         conda activate /usr/share/miniconda/envs/flowcytometertool
-        python trainer_lucinda_version.py --nogui
-
-    - name: Create release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: "Release ${{ github.ref }}"
-        draft: false
-        prerelease: false
+        python flow_cytometer_tool.py --nogui
