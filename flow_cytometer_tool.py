@@ -40,10 +40,10 @@ class UnifiedApp:
         os.makedirs(self.download_path, exist_ok=True)
         self.cyz2json_dir = os.path.join(self.tool_dir, "cyz2json")
         model_dir = os.path.join(self.tool_dir, "models")
+        self.model_path = os.path.join(self.tool_dir, f'models/final_model_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pkl')
         self.plots_dir = os.path.join(self.tool_dir, "Training plots")
         os.makedirs(self.plots_dir, exist_ok=True)
         os.makedirs(model_dir, exist_ok=True)
-        self.model_path = os.path.join(model_dir, "final_model.pkl")
         self.df = None
         self.pumped_volume = 1
         self.selector = None
@@ -58,7 +58,6 @@ class UnifiedApp:
         self.cyz_file = os.path.join(self.tool_dir, "tempfile.cyz")
         self.json_file = os.path.join(self.tool_dir, "tempfile.json")
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
-        self.model_path = os.path.join(self.tool_dir, "models/final_model.pkl")
 
     def build_plots_tab(self, notebook):
         self.tab_plots = ttk.Frame(notebook)

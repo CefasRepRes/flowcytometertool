@@ -16,7 +16,7 @@ import shutil
 from tkinter import simpledialog, ttk
 from azure.storage.blob import ContainerClient, BlobServiceClient
 import joblib
-from datetime import datetime
+import datetime
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.lines import Line2D
 from matplotlib.widgets import PolygonSelector
@@ -135,12 +135,12 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
-        combined_df['source_label'] = [
-            re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
-        ]
-        combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
-        print('Cleaned group names to something consistent')
-        print("Cleaned source labels:", list(set(combined_df['source_label'])))
+        #combined_df['source_label'] = [
+        #    re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
+        #]
+        #combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
+        #print('Cleaned group names to something consistent')
+        #print("Cleaned source labels:", list(set(combined_df['source_label'])))
         print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
         combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
         if combined_df is not None and not combined_df.empty:
@@ -1084,7 +1084,7 @@ def run_backend_only():
     cyz2json_dir = os.path.join(tool_dir, "cyz2json")
     model_dir = os.path.join(tool_dir, "models")
     plots_dir = os.path.join(tool_dir, "plots")
-    model_path = os.path.join(model_dir, "final_model.pkl")
+    model_path = os.path.join(model_dir, f'final_model_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pkl')
     os.makedirs(plots_dir, exist_ok=True)
     os.makedirs(download_path, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
