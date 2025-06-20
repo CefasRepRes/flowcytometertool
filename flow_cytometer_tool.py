@@ -434,9 +434,13 @@ class UnifiedApp:
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
         self.max_per_class_entry.insert(0, "100000")
         self.max_per_class_entry.pack(pady=5)
-        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, nogui=False, self = self, max_per_class = int(self.max_per_class_entry.get()))).pack(pady=5)
+        self.calibration_var = tk.BooleanVar(value=False)  # default is OFF because of this pickling issue
+        tk.Checkbutton(self.tab_download, text="Enable Calibration", variable=self.calibration_var).pack(pady=5)           
+        tk.Button(self.tab_download, text="Train Model", command=lambda: train_model(self.df, self.plots_dir, self.model_path, calibration_enabled=self.calibration_var.get(), nogui=False, self=self, max_per_class = int(self.max_per_class_entry.get()))).pack(pady=5)
         tk.Button(self.tab_download, text="Predict Test Set", command=self.handle_predict_test_set).pack(pady=5)
         self.build_expertise_matrix_editor(self.tab_download)
+
+
 
     def build_visualization_tab(self):
         self.x_variable_combobox = ttk.Combobox(self.tab_visualize)

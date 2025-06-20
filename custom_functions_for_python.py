@@ -425,7 +425,7 @@ def getFinalResults(fitted_final_classifier):
   print(f"The final Classifier is : \n {fitted_final_classifier}")
 
 
-def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve, filename_importance, plots_dir):
+def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve, filename_importance, plots_dir, calibration_enabled = False):
   """Function that runs the entire supervised classifier building process by calling the other custom functions"""
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
@@ -463,10 +463,12 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
     scorer=scorer,
     plots_path = plots_dir
   )  
-  # Calibrate the classifier
-  calibratedclassifier = calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
-  with open(filename_finalCalibratedModel, 'wb') as f:
-    pickle.dump(calibratedclassifier, f)
+  
+  if calibration_enabled:
+    # Calibrate the classifier
+    calibratedclassifier = calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
+    with open(filename_finalCalibratedModel, 'wb') as f:
+      pickle.dump(calibratedclassifier, f)
 
 
 ########################## Apply Supervised Classifier #########################

@@ -61,7 +61,7 @@ def stratified_subsample(df, target_column, max_per_class=1000):
     return df.groupby(target_column, group_keys=False).apply(lambda x: x.sample(min(len(x), max_per_class), random_state=42)).reset_index(drop=True)
 
 
-def train_model(df, plots_dir, model_path, nogui=False, self = None, max_per_class = 100000):
+def train_model(df, plots_dir, model_path, nogui=False, self = None, calibration_enabled = False, max_per_class = 100000):
     try:
         if df is None:
             if nogui:
@@ -70,7 +70,7 @@ def train_model(df, plots_dir, model_path, nogui=False, self = None, max_per_cla
                 from tkinter import messagebox
                 messagebox.showerror("Error", "No data to train on.")
             return
-        train_classifier(df, plots_dir, model_path, max_per_class)
+        train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled)
         if nogui:
             print("Model training completed successfully.")
         else:
@@ -714,7 +714,7 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
 
 
 
-def train_classifier(df, plots_dir, model_path, max_per_class):
+def train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled = False):
     df = stratified_subsample(df, target_column="source_label", max_per_class=max_per_class)
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
