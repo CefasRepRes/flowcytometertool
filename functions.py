@@ -741,7 +741,7 @@ def train_classifier(df, plots_dir, model_path, max_per_class):
         filename_cvResults=os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"),
         filename_learningCurve=os.path.join(os.path.dirname(model_path),"learning_curve" + os.path.basename(model_path) + ".csv"),
         filename_finalFittedModel=model_path,
-        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
+        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path), f"final_model_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.probabilistic_pkl"),
         filename_importance = os.path.join(os.path.dirname(model_path), "permutation_importance_" + os.path.basename(model_path) + ".csv"),
         validation_set = test_df,
         plots_dir = plots_dir        

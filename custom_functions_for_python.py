@@ -32,6 +32,9 @@ from sklearn.model_selection import StratifiedKFold
 import glob
 import joblib
 import datetime
+import pickle
+
+
 ################################################################################
 ############################# Custom Functions #################################
 ################################################################################
@@ -344,10 +347,10 @@ def calibrateClassifier(fitted_final_classifier, validation_set, target_name, gr
   timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
   filename_finalCalibratedModel = os.path.join(os.path.dirname(filename_finalCalibratedModel), f"final_model_{timestamp}.probabilistic_pkl")
   
-  joblib.dump(fitted_calibrated_classifier, filename_finalCalibratedModel)
   
   calibration_stop_time = time() - calibration_start_time
   print(f"Done ! Time elapsed : {calibration_stop_time} s \n")
+  return fitted_calibrated_classifier
 
 
 
@@ -461,7 +464,9 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
     plots_path = plots_dir
   )  
   # Calibrate the classifier
-  calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
+  calibratedclassifier = calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
+  with open(filename_finalCalibratedModel, 'wb') as f:
+    pickle.dump(calibratedclassifier, f)
 
 
 ########################## Apply Supervised Classifier #########################
