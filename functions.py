@@ -36,7 +36,7 @@ from watchdog.events import FileSystemEventHandler
 from tkinter import filedialog
 import tempfile
 import sys
-
+import time
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -117,7 +117,7 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, expertise_matrix_path, nogui=False):
+def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None):
     if nogui:
         zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -134,7 +134,7 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
 
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
-        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
+        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
         combined_df['source_label'] = [
             re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
         ]
@@ -233,7 +233,22 @@ class FileHandler(FileSystemEventHandler):
             listmode_file = os.path.join(self.output_folder, base_filename.replace(".cyz", ".csv"))
             predictions_file = os.path.join(self.output_folder, base_filename.replace(".cyz", "_predictions.csv"))
 
-            load_file(self.cyz2json_path, file_path, json_file)
+            if not wait_for_file_release(file_path):
+                log_message(f"Timeout: File still locked after waiting: {file_path}")
+                return
+
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    load_file(self.cyz2json_path, file_path, json_file)
+                    break
+                except Exception as e:
+                    log_message(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(4)
+                    else:
+                        raise
+
             log_message(f"Success: Cyz2json applied {file_path}")
             to_listmode(json_file, listmode_file)
             instrument_file = os.path.join(self.output_folder, f"{base_filename}_instrument.csv")
@@ -352,6 +367,17 @@ def download_file(url, tool_dir, filename):
     except requests.RequestException as e:
         log_message(f"Download Error: Failed to download file: {e}")
         return None
+
+
+def wait_for_file_release(file_path, timeout=30, interval=1):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with open(file_path, 'rb'):
+                return True
+        except IOError:
+            time.sleep(interval)
+    return False
 
 def load_file(cyz2json_path, downloaded_file, json_file):
     try:
@@ -511,7 +537,7 @@ def compute_consensual_labels_and_sample_weights(data):
 
 
 
-def build_consensual_dataset(base_path, expertise_levels, zonechoice):
+def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None):
     """
     Build a consensual dataset from flow cytometry CSV files.
     
@@ -550,6 +576,10 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
         return None
     
     combined_df = pd.concat(all_data, ignore_index=True)
+    
+    if prompt_merge_fn is not None:
+        prompt_merge_fn(combined_df)
+    
     combined_df.columns = combined_df.columns.str.replace(r'\s+', '_', regex=True)
     combined_df = combined_df.dropna()
     print(combined_df)

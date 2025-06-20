@@ -90,7 +90,7 @@ def createParametersList(logreg_clf, svm_clf, rf_clf, hgb_clf):
   # Random Forest
   MTRY = uniform(0.1, 0.9)
   SAMPLE_FRACTION = uniform(0.1, 0.9)
-  NTREES = uniform_int(100, 900)
+  NTREES = uniform_int(10, 100)
   # Histogram-based Gradient Boosting
   MAX_DEPTH = uniform_int(1, 14)
   MAX_FEATURES = uniform(0.1, 0.9)

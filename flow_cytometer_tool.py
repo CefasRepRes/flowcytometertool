@@ -269,7 +269,51 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False)
+        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping)
+
+    def prompt_class_grouping(self,df):
+        if df is None or 'source_label' not in df.columns:
+            return
+
+        import tkinter as tk
+        from tkinter import simpledialog, messagebox
+
+        while True:
+            label_list = sorted(df['source_label'].dropna().unique())
+            if len(label_list) <= 1:
+                break
+            top = tk.Toplevel(self.root)
+            top.title("Merge Class Labels")
+
+            listbox = tk.Listbox(top, selectmode=tk.MULTIPLE, width=50)
+            for label in label_list:
+                listbox.insert(tk.END, label)
+            listbox.pack(padx=10, pady=10)
+
+            def merge_selected():
+                indices = listbox.curselection()
+                if not indices:
+                    top.destroy()
+                    return
+                selected_labels = [label_list[i] for i in indices]
+                new_label = simpledialog.askstring("New Label", f"Merge {selected_labels} into:")
+                if new_label:
+                    df['source_label'] = df['source_label'].replace({lbl: new_label for lbl in selected_labels})
+                    messagebox.showinfo("Merged", f"Merged {selected_labels} into {new_label}")
+                top.destroy()
+
+            merge_button = tk.Button(top, text="Merge Selected", command=merge_selected)
+            merge_button.pack(pady=5)
+
+            top.grab_set()
+            self.root.wait_window(top)
+
+            cont = messagebox.askyesno("Continue?", "Do you want to merge more class labels?")
+            if not cont:
+                break
+
+        self.refresh_comboboxes()
+
 
     def handle_predict_test_set(self):
         if self.df is None:
