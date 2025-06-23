@@ -744,7 +744,8 @@ def train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabl
         filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path), f"final_model_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.probabilistic_pkl"),
         filename_importance = os.path.join(os.path.dirname(model_path), "permutation_importance_" + os.path.basename(model_path) + ".csv"),
         validation_set = test_df,
-        plots_dir = plots_dir        
+        plots_dir = plots_dir,
+        calibration_enabled = calibration_enabled
     )
 
     # Evaluate on test set
