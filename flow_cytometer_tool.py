@@ -189,13 +189,6 @@ class UnifiedApp:
         # Only run this on Windows as linux should already have it installed
         if platform.system().lower() == "windows":
             try:
-                subprocess.Popen(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
-                messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
-            except Exception as e:
-                print(f"Failed to launch .NET SDK installation via winget: {e}")
-                messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
-        if platform.system().lower() == "windows":
-            try:
                 subprocess.run(["winget", "install", "--id", "Microsoft.DotNet.SDK.8", "--source", "winget"], shell=True)
                 messagebox.showinfo("Info", ".NET SDK installation started. Please follow any prompts that appear.")
                 # Notify user that the app must be restarted
@@ -210,7 +203,8 @@ class UnifiedApp:
                 print(f"Failed to launch .NET SDK installation via winget: {e}")
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
 
-
+    def build_individual_labelling_tab(self):
+        tk.Button(self.tab_individual_labelling, text="Download cyz2json", command=self.install_all_requirements).pack(pady=10)
 
     def create_widgets(self):
         #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
@@ -231,6 +225,10 @@ class UnifiedApp:
         self.tab_local_watcher = ttk.Frame(notebook)
         notebook.add(self.tab_local_watcher, text="Local Watcher")
         self.build_local_watcher_tab()
+        self.tab_individual_labelling = ttk.Frame(notebook)
+        notebook.add(self.tab_individual_labelling, text="Individual Labelling")
+        self.build_individual_labelling_tab()
+        
 
     def redirect_stdout_to_gui(self):
         self.log_output = ScrolledText(self.root, height=10, state='disabled')

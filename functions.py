@@ -61,6 +61,24 @@ def stratified_subsample(df, target_column, max_per_class=1000):
     return df.groupby(target_column, group_keys=False).apply(lambda x: x.sample(min(len(x), max_per_class), random_state=42)).reset_index(drop=True)
 
 
+def compile_cyz2json(clone_dir, path_entry):
+    """Clone and compile the cyz2json tool."""
+    if os.path.exists(clone_dir):
+        messagebox.showinfo("Info", "cyz2json already exists in " + clone_dir)
+        return
+
+    try:
+        subprocess.run(["git", "clone", "https://github.com/OBAMANEXT/cyz2json.git", clone_dir], check=True)
+        subprocess.run(["dotnet", "build", "-o", "bin"], cwd=clone_dir, check=True)
+        path_entry.delete(0, tk.END)
+        path_entry.insert(0, os.path.join(clone_dir, "bin", "Cyz2Json.dll"))
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Compilation Error", f"Failed to compile cyz2json: {e}. Have you installed the requirement DotNet version 8.0? See https://github.com/OBAMANEXT/cyz2json")
+    except Exception as e:
+        messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
 def train_model(df, plots_dir, model_path, nogui=False, self = None, calibration_enabled = False, max_per_class = 100000):
     try:
         if df is None:
