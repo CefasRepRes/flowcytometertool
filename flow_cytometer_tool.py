@@ -67,7 +67,7 @@ def spoof_calibration(csv_path, output_path=None):
         
         # Define band centers and a tolerance (e.g., keep only values within 40% of each band width around center)
         band_width = bin_edges[1] - bin_edges[0]
-        tolerance = band_width * 0.4  # keep 40% around center
+        tolerance = band_width * 0.25  # keep 40% around center
         
         band_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         
