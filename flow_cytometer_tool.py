@@ -33,66 +33,165 @@ import pandas as pd
 import numpy as np
 import os
 
+import pandas as pd
+import numpy as np
+import os
+
+import pandas as pd
+import numpy as np
+import os
+
+
+import pandas as pd
+import numpy as np
+import os
+
+
+import pandas as pd
+import numpy as np
+import os
+
+    
+import pandas as pd
+from sklearn.cluster import KMeans
+
 def spoof_calibration(csv_path, output_path=None):
     """
     Filters the CSV file so that FL_Red_total, FL_Orange_total, and FL_Yellow_total
-    values fall into 8 equally spaced, non-overlapping bands for each column independently.
-    The maximum for banding is set to the 90th percentile of each column, minimum remains the min.
-    Rows that do not fall into any band for any dimension are discarded.
-    
-    Parameters:
-        csv_path (str): Path to the input CSV file.
-        output_path (str): Path to save the filtered CSV file. If None, creates a default path.
+    values all fall within the same band index (out of 8 equally spaced bands between min and 90th percentile).
+    Rows where the band index is not the same for all three columns are discarded.
+    Then balances the bands by upsampling underrepresented bands with replacement until all bands
+    have the same number of rows as the most common band. Each new upsampled row is jittered from
+    the most recently created row, creating a 'growing' jitter effect.
     """
-    # Load the CSV
     df = pd.read_csv(csv_path)
-    
-    # Ensure required columns exist
     required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
     for col in required_cols:
         if col not in df.columns:
             raise ValueError(f"Column '{col}' not found in the CSV.")
-    
-    # Hardcode number of bands
+
     num_bands = 8
-    
-    # Create masks for each column
-    masks = []
+    band_edges = {}
+    band_widths = {}
     for col in required_cols:
         col_min = df[col].min()
-        col_max = np.percentile(df[col], 90)  # Use 90th percentile as max
-        
-        # Compute equally spaced bin edges
-        bin_edges = np.linspace(col_min, col_max, num_bands + 1)
-        
-        # Define band centers and a tolerance (e.g., keep only values within 40% of each band width around center)
-        band_width = bin_edges[1] - bin_edges[0]
-        tolerance = band_width * 0.25  # keep 40% around center
-        
-        band_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        
-        # Build mask for this column
-        col_mask = pd.Series(False, index=df.index)
-        for center in band_centers:
-            col_mask |= (df[col] >= center - tolerance) & (df[col] <= center + tolerance)
-        
-        masks.append(col_mask)
-    
-    # Combine masks: keep rows that satisfy all three columns
-    final_mask = masks[0] & masks[1] & masks[2]
-    filtered_df = df[final_mask].copy()
-    
-    # Determine output path
+        col_max = np.percentile(df[col], 70)
+        edges = np.linspace(col_min, col_max, num_bands + 1)
+        band_edges[col] = edges
+        band_widths[col] = edges[1] - edges[0]
+
+    def get_band_index(value, edges):
+        for i in range(len(edges) - 1):
+            if edges[i] <= value <= edges[i + 1]:
+                return i
+        return None
+
+    band_indices = pd.DataFrame(index=df.index)
+    for col in required_cols:
+        band_indices[col] = df[col].apply(lambda v: get_band_index(v, band_edges[col]))
+
+    same_band_mask = (band_indices.notnull().all(axis=1)) & \
+                     (band_indices[required_cols[0]] == band_indices[required_cols[1]]) & \
+                     (band_indices[required_cols[1]] == band_indices[required_cols[2]])
+
+    filtered_df = df[same_band_mask].copy()
+    filtered_indices = band_indices[same_band_mask].copy()
+
+    band_counts = filtered_indices[required_cols[0]].value_counts()
+    if band_counts.empty:
+        raise ValueError("No rows found after filtering for same band across all three dimensions.")
+
+    target_count = band_counts.max()
+
+    balanced_rows = []
+    for band in range(num_bands):
+        band_mask = filtered_indices[required_cols[0]] == band
+        band_rows = filtered_df[band_mask].copy()
+        count = len(band_rows)
+        if count == 0:
+            continue
+
+        # If underrepresented, upsample with growing jitter
+        if count < target_count:
+            new_rows = []
+            last_row = None
+            for i in range(target_count - count):
+                if last_row is None:
+                    base_row = band_rows.sample(n=1).iloc[0].copy()
+                else:
+                    base_row = last_row.copy()
+                for col in required_cols:
+                    width = band_widths[col]
+                    jitter = np.random.uniform(-0.03 * width, 0.03 * width)
+                    base_row[col] += jitter
+                new_rows.append(base_row)
+                last_row = base_row
+            additional_rows = pd.DataFrame(new_rows)
+            band_rows = pd.concat([band_rows, additional_rows], ignore_index=True)
+
+        balanced_rows.append(band_rows)
+
+    balanced_df = pd.concat(balanced_rows, ignore_index=True)
+
     if output_path is None:
         base, ext = os.path.splitext(csv_path)
         output_path = f"{base}_spoofed{ext}"
-    
-    # Save filtered CSV
-    filtered_df.to_csv(output_path, index=False)
-    print(f"Spoofed calibration applied. Filtered data saved to: {output_path}")
-    print(f"Original rows: {len(df)}, Filtered rows: {len(filtered_df)}")
+
+    balanced_df.to_csv(output_path, index=False)
+    print(f"Spoofed calibration applied. Balanced data saved to: {output_path}")
+    print(f"Original rows after filtering: {len(filtered_df)}, Balanced rows: {len(balanced_df)}")
+    print(f"Target rows per band: {target_count}")
     
 
+def cluster_colour_bands(csv_path, n_clusters=8, output_path=None):
+    """
+    Cluster the dataframe along FL_Red_total, FL_Orange_total, and FL_Yellow_total,
+    aiming to detect n_clusters (default 8). Returns the cluster centers for each axis.
+    Optionally saves the cluster centers to a CSV.
+    """
+    df = pd.read_csv(csv_path)
+    required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Column '{col}' not found in the CSV.")
+
+    X = df[required_cols].values
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    kmeans.fit(X)
+    cluster_centers = kmeans.cluster_centers_
+
+    # Optionally save cluster centers
+    if output_path:
+        pd.DataFrame(cluster_centers, columns=required_cols).to_csv(output_path, index=False)
+
+    # Return as a dict for easy use in UI
+    return {
+        'FL_Red_total_means': cluster_centers[:, 0].tolist(),
+        'FL_Orange_total_means': cluster_centers[:, 1].tolist(),
+        'FL_Yellow_total_means': cluster_centers[:, 2].tolist(),
+        'all_centers': cluster_centers
+    }
+
+
+def plot_cluster_centers(csv_path, cluster_centers):
+    """
+    Plots the cluster centers for each pair of axes.
+    """
+    pairs = [
+        ('Fl Red_total', 'Fl Yellow_total', 'Red vs Yellow'),
+        ('Fl Red_total', 'Fl Orange_total', 'Red vs Orange'),
+        ('Fl Yellow_total', 'Fl Orange_total', 'Yellow vs Orange')
+    ]
+    for x, y, title in pairs:
+        plt.figure(figsize=(6, 6))
+        plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], s=100, c='blue', label='Cluster Centers')
+        plt.xlabel(x)
+        plt.ylabel(y)
+        plt.title(f'Cluster Centers: {title}')
+        plt.legend()
+        plt.show()
+        
+        
 class UnifiedApp:
     def __init__(self, root):
         self.root = root
@@ -325,6 +424,17 @@ class UnifiedApp:
             command=self.process_calibration_file
         ).pack(pady=10)
 
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Cluster Colour Bands",
+            command=self.cluster_colour_bands_ui
+        ).pack(pady=10)
+        
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Plot Cluster Centers",
+            command=self.plot_cluster_centers_ui
+        ).pack(pady=10)        
 
         # Sample file selection
         tk.Label(self.tab_individual_labelling, text="Select Sample File (.cyz):").pack(pady=5)
@@ -335,6 +445,34 @@ class UnifiedApp:
             text="Browse Sample File",
             command=lambda: self.select_cyz_file(self.sample_file_entry)
         ).pack(pady=5)
+        
+        
+    def plot_cluster_centers_ui(self):
+        csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
+        try:
+            # Cluster and get centers
+            result = cluster_colour_bands(csv_path, n_clusters=8)
+            cluster_centers = result['all_centers']
+            plot_cluster_centers(csv_path, cluster_centers)
+        except Exception as e:
+            messagebox.showerror("Plotting Error", f"Failed to plot cluster centers:\n{e}")
+            
+        
+    def cluster_colour_bands_ui(self):
+        # Get the path to the spoofed calibration CSV
+        csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
+        try:
+            result = cluster_colour_bands(csv_path, n_clusters=8, output_path=csv_path.replace('.csv', '_clusters.csv'))
+            means_msg = (
+                "Cluster means for each axis:\n"
+                f"FL_Red_total: {result['FL_Red_total_means']}\n"
+                f"FL_Orange_total: {result['FL_Orange_total_means']}\n"
+                f"FL_Yellow_total: {result['FL_Yellow_total_means']}\n"
+            )
+            messagebox.showinfo("Clustering Complete", means_msg)
+        except Exception as e:
+            messagebox.showerror("Clustering Error", f"Failed to cluster colour bands:\n{e}")
+
 
     def select_cyz_file(self, entry_widget):
         file_path = filedialog.askopenfilename(filetypes=[("CYZ files", "*.cyz")])
