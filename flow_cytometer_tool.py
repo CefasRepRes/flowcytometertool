@@ -29,6 +29,70 @@ import urllib.request
 
 #import multiprocessing
 
+import pandas as pd
+import numpy as np
+import os
+
+def spoof_calibration(csv_path, output_path=None):
+    """
+    Filters the CSV file so that FL_Red_total, FL_Orange_total, and FL_Yellow_total
+    values fall into 8 equally spaced, non-overlapping bands for each column independently.
+    The maximum for banding is set to the 90th percentile of each column, minimum remains the min.
+    Rows that do not fall into any band for any dimension are discarded.
+    
+    Parameters:
+        csv_path (str): Path to the input CSV file.
+        output_path (str): Path to save the filtered CSV file. If None, creates a default path.
+    """
+    # Load the CSV
+    df = pd.read_csv(csv_path)
+    
+    # Ensure required columns exist
+    required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Column '{col}' not found in the CSV.")
+    
+    # Hardcode number of bands
+    num_bands = 8
+    
+    # Create masks for each column
+    masks = []
+    for col in required_cols:
+        col_min = df[col].min()
+        col_max = np.percentile(df[col], 90)  # Use 90th percentile as max
+        
+        # Compute equally spaced bin edges
+        bin_edges = np.linspace(col_min, col_max, num_bands + 1)
+        
+        # Define band centers and a tolerance (e.g., keep only values within 40% of each band width around center)
+        band_width = bin_edges[1] - bin_edges[0]
+        tolerance = band_width * 0.4  # keep 40% around center
+        
+        band_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        
+        # Build mask for this column
+        col_mask = pd.Series(False, index=df.index)
+        for center in band_centers:
+            col_mask |= (df[col] >= center - tolerance) & (df[col] <= center + tolerance)
+        
+        masks.append(col_mask)
+    
+    # Combine masks: keep rows that satisfy all three columns
+    final_mask = masks[0] & masks[1] & masks[2]
+    filtered_df = df[final_mask].copy()
+    
+    # Determine output path
+    if output_path is None:
+        base, ext = os.path.splitext(csv_path)
+        output_path = f"{base}_spoofed{ext}"
+    
+    # Save filtered CSV
+    filtered_df.to_csv(output_path, index=False)
+    print(f"Spoofed calibration applied. Filtered data saved to: {output_path}")
+    print(f"Original rows: {len(df)}, Filtered rows: {len(filtered_df)}")
+    
+
 class UnifiedApp:
     def __init__(self, root):
         self.root = root
@@ -203,8 +267,81 @@ class UnifiedApp:
                 print(f"Failed to launch .NET SDK installation via winget: {e}")
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
 
+    def process_calibration_file(self):
+        cyz_path = self.calibration_file_entry.get().strip()
+        if not cyz_path or not cyz_path.lower().endswith('.cyz'):
+            messagebox.showerror("Error", "Please select a valid .cyz calibration file.")
+            return
+
+        # Define output paths
+        json_path = cyz_path.replace('.cyz', '_calib.json')
+        csv_path = cyz_path.replace('.cyz', '_calib.csv')
+
+        try:
+            # Apply cyz2json
+            load_file(self.path_entry.get(), cyz_path, json_path)  # path_entry holds cyz2json.dll path
+
+            # Convert JSON to CSV
+            to_listmode(json_path, csv_path)
+
+            # If spoof calibration is checked, apply spoofing
+            if self.spoof_calibration_var.get():
+                spoofed_csv_path = csv_path.replace('.csv', '_spoofed.csv')
+                spoof_calibration(csv_path, spoofed_csv_path)
+                messagebox.showinfo("Success", f"Calibration file processed and spoofed:\n{spoofed_csv_path}")
+            else:
+                messagebox.showinfo("Success", f"Calibration file processed:\n{csv_path}")
+
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Failed to process calibration file:\n{e}")
+
+
+
     def build_individual_labelling_tab(self):
         tk.Button(self.tab_individual_labelling, text="Download cyz2json", command=self.install_all_requirements).pack(pady=10)
+
+        # Calibration file selection
+        tk.Label(self.tab_individual_labelling, text="Select Calibration File (.cyz):").pack(pady=5)
+        self.calibration_file_entry = tk.Entry(self.tab_individual_labelling, width=80)
+        self.calibration_file_entry.pack(pady=5)
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Browse Calibration File",
+            command=lambda: self.select_cyz_file(self.calibration_file_entry)
+        ).pack(pady=5)
+
+        # Spoof calibration checkbox
+        self.spoof_calibration_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            self.tab_individual_labelling,
+            text="Spoof Calibration (simulate 8 non-overlapping bands)",
+            variable=self.spoof_calibration_var
+        ).pack(pady=5)
+
+        # Process calibration file button
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Process Calibration File",
+            command=self.process_calibration_file
+        ).pack(pady=10)
+
+
+        # Sample file selection
+        tk.Label(self.tab_individual_labelling, text="Select Sample File (.cyz):").pack(pady=5)
+        self.sample_file_entry = tk.Entry(self.tab_individual_labelling, width=80)
+        self.sample_file_entry.pack(pady=5)
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Browse Sample File",
+            command=lambda: self.select_cyz_file(self.sample_file_entry)
+        ).pack(pady=5)
+
+    def select_cyz_file(self, entry_widget):
+        file_path = filedialog.askopenfilename(filetypes=[("CYZ files", "*.cyz")])
+        if file_path:
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, file_path)
+
 
     def create_widgets(self):
         #self.redirect_stdout_to_gui() This seems to interfere with the model training functions
