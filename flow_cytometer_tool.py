@@ -57,7 +57,7 @@ from sklearn.cluster import KMeans
 
 def spoof_calibration(csv_path, output_path=None):
     """
-    Filters the CSV file so that FL_Red_total, FL_Orange_total, and FL_Yellow_total
+    Filters the CSV file so that Fl Red_total, Fl Orange_total, and Fl Yellow_total
     values all fall within the same band index (out of 8 equally spaced bands between min and 90th percentile).
     Rows where the band index is not the same for all three columns are discarded.
     Then balances the bands by upsampling underrepresented bands with replacement until all bands
@@ -145,7 +145,7 @@ def spoof_calibration(csv_path, output_path=None):
 
 def cluster_colour_bands(csv_path, n_clusters=8, output_path=None):
     """
-    Cluster the dataframe along FL_Red_total, FL_Orange_total, and FL_Yellow_total,
+    Cluster the dataframe along Fl Red_total, Fl Orange_total, and Fl Yellow_total,
     aiming to detect n_clusters (default 8). Returns the cluster centers for each axis.
     Optionally saves the cluster centers to a CSV.
     """
@@ -166,32 +166,38 @@ def cluster_colour_bands(csv_path, n_clusters=8, output_path=None):
 
     # Return as a dict for easy use in UI
     return {
-        'FL_Red_total_means': cluster_centers[:, 0].tolist(),
-        'FL_Orange_total_means': cluster_centers[:, 1].tolist(),
-        'FL_Yellow_total_means': cluster_centers[:, 2].tolist(),
+        'Fl Red_total_means': cluster_centers[:, 0].tolist(),
+        'Fl Orange_total_means': cluster_centers[:, 1].tolist(),
+        'Fl Yellow_total_means': cluster_centers[:, 2].tolist(),
         'all_centers': cluster_centers
     }
 
 
-def plot_cluster_centers(csv_path, cluster_centers):
+def plot_clusters_over_data(csv_path, cluster_centers):
     """
-    Plots the cluster centers for each pair of axes.
+    Plots the spoofed calibration data and overlays the cluster centers for each pair of axes.
     """
+    df = pd.read_csv(csv_path)
     pairs = [
         ('Fl Red_total', 'Fl Yellow_total', 'Red vs Yellow'),
         ('Fl Red_total', 'Fl Orange_total', 'Red vs Orange'),
         ('Fl Yellow_total', 'Fl Orange_total', 'Yellow vs Orange')
     ]
     for x, y, title in pairs:
-        plt.figure(figsize=(6, 6))
-        plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], s=100, c='blue', label='Cluster Centers')
+        plt.figure(figsize=(7, 7))
+        plt.scatter(df[x], df[y], s=10, alpha=0.3, color='gray', label='Spoofed Data')
+        idx_x = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total'].index(x)
+        idx_y = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total'].index(y)
+        plt.scatter(cluster_centers[:, idx_x], cluster_centers[:, idx_y],
+                    s=120, c='red', marker='X', label='Cluster Centers')
         plt.xlabel(x)
         plt.ylabel(y)
-        plt.title(f'Cluster Centers: {title}')
+        plt.title(f'Cluster Centers over Spoofed Data: {title}')
         plt.legend()
+        plt.tight_layout()
         plt.show()
-        
-        
+
+
 class UnifiedApp:
     def __init__(self, root):
         self.root = root
@@ -432,8 +438,8 @@ class UnifiedApp:
         
         tk.Button(
             self.tab_individual_labelling,
-            text="Plot Cluster Centers",
-            command=self.plot_cluster_centers_ui
+            text="Plot Clusters Over Data",
+            command=self.plot_clusters_over_data_ui
         ).pack(pady=10)        
 
         # Sample file selection
@@ -447,16 +453,14 @@ class UnifiedApp:
         ).pack(pady=5)
         
         
-    def plot_cluster_centers_ui(self):
+    def plot_clusters_over_data_ui(self):
         csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
         try:
-            # Cluster and get centers
             result = cluster_colour_bands(csv_path, n_clusters=8)
             cluster_centers = result['all_centers']
-            plot_cluster_centers(csv_path, cluster_centers)
+            plot_clusters_over_data(csv_path, cluster_centers)
         except Exception as e:
-            messagebox.showerror("Plotting Error", f"Failed to plot cluster centers:\n{e}")
-            
+            messagebox.showerror("Plotting Error", f"Failed to plot clusters over data:\n{e}")            
         
     def cluster_colour_bands_ui(self):
         # Get the path to the spoofed calibration CSV
@@ -465,9 +469,9 @@ class UnifiedApp:
             result = cluster_colour_bands(csv_path, n_clusters=8, output_path=csv_path.replace('.csv', '_clusters.csv'))
             means_msg = (
                 "Cluster means for each axis:\n"
-                f"FL_Red_total: {result['FL_Red_total_means']}\n"
-                f"FL_Orange_total: {result['FL_Orange_total_means']}\n"
-                f"FL_Yellow_total: {result['FL_Yellow_total_means']}\n"
+                f"Fl Red_total: {result['Fl Red_total_means']}\n"
+                f"Fl Orange_total: {result['Fl Orange_total_means']}\n"
+                f"Fl Yellow_total: {result['Fl Yellow_total_means']}\n"
             )
             messagebox.showinfo("Clustering Complete", means_msg)
         except Exception as e:
@@ -1018,13 +1022,13 @@ class UnifiedApp:
                     ) for category in unique_categories
                 }
                 data['color'] = data['category'].map(color_map)
-                x_99 = np.percentile(data["Fl_Yellow_total"], 99.5)
-                y_99 = np.percentile(data["Fl_Red_total"], 99.5)
-                z_99 = np.percentile(data["Fl_Orange_total"], 99.5)
+                x_99 = np.percentile(data["Fl Yellow_total"], 99.5)
+                y_99 = np.percentile(data["Fl Red_total"], 99.5)
+                z_99 = np.percentile(data["Fl Orange_total"], 99.5)
                 scatter = go.Scatter3d(
-                    x=data["Fl_Yellow_total"],
-                    y=data["Fl_Red_total"],
-                    z=data["Fl_Orange_total"],
+                    x=data["Fl Yellow_total"],
+                    y=data["Fl Red_total"],
+                    z=data["Fl Orange_total"],
                     mode='markers',
                     marker=dict(size=5, color=data['color'], showscale=False),
                     text=data['category'],
@@ -1038,9 +1042,9 @@ class UnifiedApp:
                 fig = go.Figure(data=[scatter])
                 fig.update_layout(
                     scene=dict(
-                        xaxis=dict(range=[0, x_99], title="Fl_Yellow_total"),
-                        yaxis=dict(range=[0, y_99], title="Fl_Red_total"),
-                        zaxis=dict(range=[0, z_99], title="Fl_Orange_total"),
+                        xaxis=dict(range=[0, x_99], title="Fl Yellow_total"),
+                        yaxis=dict(range=[0, y_99], title="Fl Red_total"),
+                        zaxis=dict(range=[0, z_99], title="Fl Orange_total"),
                         camera=camera
                     ),
                     title='3D Data Points'
