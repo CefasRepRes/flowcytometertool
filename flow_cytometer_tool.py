@@ -500,6 +500,169 @@ class UnifiedApp:
             text="Browse Sample File",
             command=lambda: self.select_cyz_file(self.sample_file_entry)
         ).pack(pady=5)        
+        
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Process Sample for Individual Labelling",
+            command=self.process_sample_for_individual_labelling
+        ).pack(pady=10)
+                
+        # Add this inside build_individual_labelling_tab(self) after other buttons
+        self.start_labelling_btn = tk.Button(
+            self.tab_individual_labelling,
+            text="Start Labelling Session",
+            state=tk.DISABLED,  # Initially disabled
+            command=self.start_labelling_session
+        )
+        self.start_labelling_btn.pack(pady=10)
+
+        # Track processing states
+        self.calibration_processed = False
+        self.sample_processed = False
+
+    # Modify process_calibration_file to set flag and check button state
+    def process_calibration_file(self):
+        try:
+            # Existing calibration processing logic...
+            # After success:
+            self.calibration_processed = True
+            self.update_start_labelling_button()
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Failed to process calibration file:\n{e}")
+
+    # Modify process_sample_for_individual_labelling to set flag and check button state
+    def process_sample_for_individual_labelling(self):
+        try:
+            # Existing sample processing logic...
+            # After success:
+            self.sample_processed = True
+            self.update_start_labelling_button()
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Failed to process sample file:\n{e}")
+
+    # Add helper to enable button only when both processed
+    def update_start_labelling_button(self):
+        if self.calibration_processed and self.sample_processed:
+            self.start_labelling_btn.config(state=tk.NORMAL)
+        else:
+            self.start_labelling_btn.config(state=tk.DISABLED)
+
+    # Define start_labelling_session method
+    def start_labelling_session(self):
+        # This will launch the labeller metadata form and then image labelling workflow
+        messagebox.showinfo("Labelling Session", "Starting interactive labelling session...")
+        self.launch_labeller_metadata_form()  # We'll implement this next        
+        
+    def launch_labeller_metadata_form(self):
+        # Create modal window
+        form = tk.Toplevel(self.root)
+        form.title("Labeller Metadata")
+        form.geometry("500x600")
+        form.grab_set()  # Make modal
+
+        # Dictionary to hold user inputs
+        inputs = {}
+
+        # Helper to create labeled entry
+        def add_entry(label_text, key, default=""):
+            tk.Label(form, text=label_text).pack(pady=3)
+            entry = tk.Entry(form, width=50)
+            entry.insert(0, default)
+            entry.pack(pady=3)
+            inputs[key] = entry
+
+        # Helper to create dropdown
+        def add_dropdown(label_text, key, options):
+            tk.Label(form, text=label_text).pack(pady=3)
+            var = tk.StringVar(value=options[0])
+            dropdown = ttk.Combobox(form, textvariable=var, values=options, state="readonly", width=47)
+            dropdown.pack(pady=3)
+            inputs[key] = dropdown
+
+        # Add fields
+        add_entry("Name:", "name", "Joseph Ribeiro")
+        add_entry("Institute:", "institute", "Cefas")
+        add_entry("Email:", "email", "joseph.ribeiro@cefas.co.uk")
+        add_dropdown("Confidence Level:", "confidence_level", ["Low", "Medium", "High"])
+        add_dropdown("Familiar with water?", "familiar_with_water", ["Yes", "No"])
+        add_entry("Years in labelling role:", "years_in_labelling_role", "0")
+        add_dropdown("Do you label every week?", "do_you_label_every_week", ["Yes", "No"])
+        add_dropdown("Do you label every month?", "do_you_label_every_month", ["Yes", "No"])
+        add_dropdown("Do you label every year?", "do_you_label_every_year", ["Yes", "No"])
+        add_dropdown("Will you be labelling taxonomy?", "will_you_be_labelling_taxonomy", ["Yes", "No"])
+        add_dropdown("Intended taxonomy level:", "intended_taxonomy_level", ["species", "genus", "family", "functional group"])
+        add_entry("If not taxonomic, alternative strategy:", "if_not_taxonomic_state_alternative_labelling_strategy", "functional group")
+
+        # Submit button
+        def submit():
+            # Validate email
+            email = inputs["email"].get().strip()
+            if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                messagebox.showerror("Validation Error", "Please enter a valid email address.")
+                return
+
+            # Validate years
+            try:
+                years = int(inputs["years_in_labelling_role"].get().strip())
+                if years < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Validation Error", "Years in labelling role must be a non-negative integer.")
+                return
+
+            # Collect all values
+            self.labeller_info = {key: widget.get().strip() for key, widget in inputs.items()}
+
+            # Close form
+            form.destroy()
+            messagebox.showinfo("Success", "Labeller metadata collected successfully!")
+            # Next step: start image labelling workflow
+            self.start_image_labelling_workflow()
+
+        tk.Button(form, text="Submit", command=submit).pack(pady=20)
+            
+    def process_sample_for_individual_labelling(self):
+        try:
+            # Get sample file path from entry
+            cyz_path = self.sample_file_entry.get().strip()
+            if not cyz_path or not cyz_path.lower().endswith('.cyz'):
+                messagebox.showerror("Error", "Please select a valid .cyz sample file.")
+                return
+
+            # Paths for output
+            json_path = cyz_path.replace('.cyz', '_sample.json')
+            images_dir = cyz_path.replace('.cyz', '_images/')
+            os.makedirs(images_dir, exist_ok=True)
+
+            # Step 1: Convert CYZ to JSON
+            load_file(self.path_entry.get(), cyz_path, json_path)
+
+            # Step 2: Extract images using listmode_particleswithimagesonly
+            import listmode_particleswithimagesonly
+            data = json.load(open(json_path, encoding="utf-8-sig"))
+            # This will save images to images_dir and return particle info
+            lines = listmode_particleswithimagesonly.extractimages(
+                particles=data["particles"],
+                dateandtime=data["instrument"]["measurementResults"]["start"],
+                images=data["images"],
+                save_images_to=images_dir
+            )
+
+            # Step 3: Display images for labelling (you may want to launch your MetadataUI here)
+            # Example: Launch a new window for labelling
+            from metadata_ui import MetadataUI
+            from metadata_handler import MetadataHandler
+
+            metadata_handler = MetadataHandler(images_dir)
+            tif_files = [f for f in os.listdir(images_dir) if f.endswith('.tif')]
+            # You can now use MetadataUI to display each image and collect labels
+            # (You may need to adapt this to your app's navigation logic)
+
+            messagebox.showinfo("Success", f"Sample processed. Images saved to:\n{images_dir}")
+
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Failed to process sample file:\n{e}")
+            
 
     def select_cyz_file(self, entry_widget):
         file_path = filedialog.askopenfilename(filetypes=[("CYZ files", "*.cyz")])
