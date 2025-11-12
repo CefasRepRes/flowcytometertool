@@ -464,59 +464,7 @@ class UnifiedApp:
             self.tab_individual_labelling,
             text="Browse Sample File",
             command=lambda: self.select_cyz_file(self.sample_file_entry)
-        ).pack(pady=5)
-        
-
-    def extract_calibration_vertices_ui(self):
-        try:
-            true_sizes = [float(x.strip()) for x in self.true_sizes_entry.get().split(',')]
-            if len(true_sizes) != 8:
-                messagebox.showerror("Input Error", "Please enter exactly 8 values for true sizes.")
-                return
-            csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
-            vertices = extract_calibration_vertices(csv_path, true_sizes)
-            self.calibration_vertices = {"calibration_vertices": vertices}
-            messagebox.showinfo("Calibration Vertices", "Calibration vertices extracted and stored in app.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to extract calibration vertices:\n{e}")
-
-    def export_calibration_vertices_json(self):
-        try:
-            if not hasattr(self, 'calibration_vertices'):
-                messagebox.showerror("Export Error", "No calibration vertices found. Extract them first.")
-                return
-            file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
-            if file_path:
-                with open(file_path, 'w') as f:
-                    json.dump(self.calibration_vertices, f, indent=2)
-                messagebox.showinfo("Export", f"Calibration vertices exported to {file_path}")
-        except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to export calibration vertices:\n{e}")
-        
-    def plot_clusters_over_data_ui(self):
-        csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
-        try:
-            result = cluster_colour_bands(csv_path, n_clusters=8)
-            cluster_centers = result['all_centers']
-            plot_clusters_over_data(csv_path, cluster_centers)
-        except Exception as e:
-            messagebox.showerror("Plotting Error", f"Failed to plot clusters over data:\n{e}")            
-        
-    def cluster_colour_bands_ui(self):
-        # Get the path to the spoofed calibration CSV
-        csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
-        try:
-            result = cluster_colour_bands(csv_path, n_clusters=8, output_path=csv_path.replace('.csv', '_clusters.csv'))
-            means_msg = (
-                "Cluster means for each axis:\n"
-                f"Fl Red_total: {result['Fl Red_total_means']}\n"
-                f"Fl Orange_total: {result['Fl Orange_total_means']}\n"
-                f"Fl Yellow_total: {result['Fl Yellow_total_means']}\n"
-            )
-            messagebox.showinfo("Clustering Complete", means_msg)
-        except Exception as e:
-            messagebox.showerror("Clustering Error", f"Failed to cluster colour bands:\n{e}")
-
+        ).pack(pady=5)        
 
     def select_cyz_file(self, entry_widget):
         file_path = filedialog.askopenfilename(filetypes=[("CYZ files", "*.cyz")])
