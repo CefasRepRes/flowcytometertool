@@ -137,6 +137,39 @@ def spoof_calibration(csv_path, output_path=None):
     balanced_df.to_csv(output_path, index=False)
     return output_path
 
+
+
+def plot_calibration_curves_from_json(json_path):
+    """
+    Load calibration vertices from JSON and plot true size vs mean cluster response
+    for all three axes on one plot, with error bars.
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    vertices = data.get("calibration_vertices", [])
+    if not vertices:
+        raise ValueError("No calibration vertices found in JSON.")
+
+    true_sizes = [v['true_size'] for v in vertices]
+    axes = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
+    colors = ['red', 'orange', 'gold']
+
+    plt.figure(figsize=(8, 6))
+    for axis, color in zip(axes, colors):
+        means = [v['means'][axis] for v in vertices]
+        stds = [v['stds'][axis] for v in vertices]
+        plt.errorbar(true_sizes, means, yerr=stds, fmt='o-', capsize=5, color=color, label=axis)
+
+    plt.xlabel('True Size (microns)')
+    plt.ylabel('Mean Cluster Response')
+    plt.title('Calibration Curves for All Axes')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
 # ---------------------------
 # Clustering Function
 # ---------------------------
@@ -271,6 +304,8 @@ class UnifiedApp:
             # Step 6: Export Vertices to JSON
             with open(json_export_path, 'w') as f:
                 json.dump(self.calibration_vertices, f, indent=2)
+                
+            plot_calibration_curves_from_json(json_export_path)
 
             messagebox.showinfo("Success", f"Calibration processing complete.\nVertices saved to:\n{json_export_path}")
 
@@ -441,7 +476,7 @@ class UnifiedApp:
         self.spoof_calibration_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             self.tab_individual_labelling,
-            text="Spoof Calibration (simulate 8 non-overlapping bands)",
+            text="Spoof Calibration (If you don't have a multimodal rainbow-bead style calibration sample. Split any file into 8 non-overlapping bands)",
             variable=self.spoof_calibration_var
         ).pack(pady=5)
 
