@@ -55,15 +55,18 @@ import os
 import pandas as pd
 from sklearn.cluster import KMeans
 
+
+import pandas as pd
+import numpy as np
+import json
+from sklearn.cluster import KMeans
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+
+# ---------------------------
+# Spoof Calibration Function
+# ---------------------------
 def spoof_calibration(csv_path, output_path=None):
-    """
-    Filters the CSV file so that Fl Red_total, Fl Orange_total, and Fl Yellow_total
-    values all fall within the same band index (out of 8 equally spaced bands between min and 90th percentile).
-    Rows where the band index is not the same for all three columns are discarded.
-    Then balances the bands by upsampling underrepresented bands with replacement until all bands
-    have the same number of rows as the most common band. Each new upsampled row is jittered from
-    the most recently created row, creating a 'growing' jitter effect.
-    """
     df = pd.read_csv(csv_path)
     required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
     for col in required_cols:
@@ -75,7 +78,7 @@ def spoof_calibration(csv_path, output_path=None):
     band_widths = {}
     for col in required_cols:
         col_min = df[col].min()
-        col_max = np.percentile(df[col], 70)
+        col_max = np.percentile(df[col], 90)
         edges = np.linspace(col_min, col_max, num_bands + 1)
         band_edges[col] = edges
         band_widths[col] = edges[1] - edges[0]
@@ -102,7 +105,6 @@ def spoof_calibration(csv_path, output_path=None):
         raise ValueError("No rows found after filtering for same band across all three dimensions.")
 
     target_count = band_counts.max()
-
     balanced_rows = []
     for band in range(num_bands):
         band_mask = filtered_indices[required_cols[0]] == band
@@ -110,8 +112,6 @@ def spoof_calibration(csv_path, output_path=None):
         count = len(band_rows)
         if count == 0:
             continue
-
-        # If underrepresented, upsample with growing jitter
         if count < target_count:
             new_rows = []
             last_row = None
@@ -122,95 +122,36 @@ def spoof_calibration(csv_path, output_path=None):
                     base_row = last_row.copy()
                 for col in required_cols:
                     width = band_widths[col]
-                    jitter = np.random.uniform(-0.03 * width, 0.03 * width)
+                    jitter = np.random.uniform(-0.01 * width, 0.01 * width)
                     base_row[col] += jitter
                 new_rows.append(base_row)
                 last_row = base_row
             additional_rows = pd.DataFrame(new_rows)
             band_rows = pd.concat([band_rows, additional_rows], ignore_index=True)
-
         balanced_rows.append(band_rows)
 
     balanced_df = pd.concat(balanced_rows, ignore_index=True)
-
     if output_path is None:
         base, ext = os.path.splitext(csv_path)
         output_path = f"{base}_spoofed{ext}"
-
     balanced_df.to_csv(output_path, index=False)
-    print(f"Spoofed calibration applied. Balanced data saved to: {output_path}")
-    print(f"Original rows after filtering: {len(filtered_df)}, Balanced rows: {len(balanced_df)}")
-    print(f"Target rows per band: {target_count}")
-    
+    return output_path
 
-def cluster_colour_bands(csv_path, n_clusters=8, output_path=None):
-    """
-    Cluster the dataframe along Fl Red_total, Fl Orange_total, and Fl Yellow_total,
-    aiming to detect n_clusters (default 8). Returns the cluster centers for each axis.
-    Optionally saves the cluster centers to a CSV.
-    """
+# ---------------------------
+# Clustering Function
+# ---------------------------
+def cluster_colour_bands(csv_path, n_clusters=8):
     df = pd.read_csv(csv_path)
     required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Column '{col}' not found in the CSV.")
-
     X = df[required_cols].values
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     kmeans.fit(X)
-    cluster_centers = kmeans.cluster_centers_
+    return {'all_centers': kmeans.cluster_centers_, 'labels': kmeans.labels_, 'data': df}
 
-    # Optionally save cluster centers
-    if output_path:
-        pd.DataFrame(cluster_centers, columns=required_cols).to_csv(output_path, index=False)
-
-    # Return as a dict for easy use in UI
-    return {
-        'Fl Red_total_means': cluster_centers[:, 0].tolist(),
-        'Fl Orange_total_means': cluster_centers[:, 1].tolist(),
-        'Fl Yellow_total_means': cluster_centers[:, 2].tolist(),
-        'all_centers': cluster_centers
-    }
-
-
-
-def extract_calibration_vertices(csv_path, true_sizes):
-    """
-    For the spoofed calibration file, for each cluster (from KMeans, n=8), compute the mean and std
-    for Fl Red_total, Fl Orange_total, Fl Yellow_total, and associate each with the user-supplied true size.
-    Returns a list of dicts (vertices).
-    """
-    df = pd.read_csv(csv_path)
-    required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
-    X = df[required_cols].values
-    kmeans = KMeans(n_clusters=8, random_state=42)
-    labels = kmeans.fit_predict(X)
-
-    # Sort clusters by mean Fl Red_total for consistent ordering
-    cluster_means = []
-    for cluster_id in range(8):
-        cluster_data = df[labels == cluster_id]
-        means = cluster_data[required_cols].mean().to_dict()
-        stds = cluster_data[required_cols].std().to_dict()
-        cluster_means.append((means['Fl Red_total'], cluster_id, means, stds))
-    cluster_means.sort()  # sort by Fl Red_total mean
-
-    # Build vertices with user-supplied true sizes
-    vertices = []
-    for i, (red_mean, cluster_id, means, stds) in enumerate(cluster_means):
-        vertex = {
-            "cluster_id": int(cluster_id),
-            "true_size": float(true_sizes[i]),
-            "means": {k: float(v) for k, v in means.items()},
-            "stds": {k: float(v) for k, v in stds.items()}
-        }
-        vertices.append(vertex)
-    return vertices
-    
+# ---------------------------
+# Plot Clusters Over Data
+# ---------------------------
 def plot_clusters_over_data(csv_path, cluster_centers):
-    """
-    Plots the spoofed calibration data and overlays the cluster centers for each pair of axes.
-    """
     df = pd.read_csv(csv_path)
     pairs = [
         ('Fl Red_total', 'Fl Yellow_total', 'Red vs Yellow'),
@@ -230,6 +171,36 @@ def plot_clusters_over_data(csv_path, cluster_centers):
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+# ---------------------------
+# Extract Calibration Vertices
+# ---------------------------
+def extract_calibration_vertices(csv_path, true_sizes):
+    df = pd.read_csv(csv_path)
+    required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
+    X = df[required_cols].values
+    kmeans = KMeans(n_clusters=8, random_state=42)
+    labels = kmeans.fit_predict(X)
+
+    cluster_means = []
+    for cluster_id in range(8):
+        cluster_data = df[labels == cluster_id]
+        means = cluster_data[required_cols].mean().to_dict()
+        stds = cluster_data[required_cols].std().to_dict()
+        cluster_means.append((means['Fl Red_total'], cluster_id, means, stds))
+    cluster_means.sort()
+
+    vertices = []
+    for i, (red_mean, cluster_id, means, stds) in enumerate(cluster_means):
+        vertex = {
+            "cluster_id": int(cluster_id),
+            "true_size": float(true_sizes[i]),
+            "means": {k: float(v) for k, v in means.items()},
+            "stds": {k: float(v) for k, v in stds.items()}
+        }
+        vertices.append(vertex)
+    return vertices
+
 
 
 class UnifiedApp:
@@ -262,6 +233,51 @@ class UnifiedApp:
         self.json_file = os.path.join(self.tool_dir, "tempfile.json")
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
 
+    def process_calibration_file(self):
+        try:
+            cyz_path = self.calibration_file_entry.get().strip()
+            if not cyz_path or not cyz_path.lower().endswith('.cyz'):
+                messagebox.showerror("Error", "Please select a valid .cyz calibration file.")
+                return
+
+            # Paths
+            json_path = cyz_path.replace('.cyz', '_calib.json')
+            csv_path = cyz_path.replace('.cyz', '_calib.csv')
+            spoofed_csv_path = cyz_path.replace('.cyz', '_calib_spoofed.csv')
+            json_export_path = cyz_path.replace('.cyz', '_calibration_vertices.json')
+
+            # Step 1: Convert CYZ → JSON → CSV
+            load_file(self.path_entry.get(), cyz_path, json_path)
+            to_listmode(json_path, csv_path)
+
+            # Step 2: Apply Spoof Calibration
+            spoof_calibration(csv_path, spoofed_csv_path)
+
+            # Step 3: Perform Clustering
+            result = cluster_colour_bands(spoofed_csv_path, n_clusters=8)
+            cluster_centers = result['all_centers']
+
+            # Step 4: Plot Spoofed Data with Cluster Centers
+            plot_clusters_over_data(spoofed_csv_path, cluster_centers)
+
+            # Step 5: Extract Calibration Vertices
+            true_sizes = [float(x.strip()) for x in self.true_sizes_entry.get().split(',')]
+            if len(true_sizes) != 8:
+                messagebox.showerror("Input Error", "Please enter exactly 8 values for true sizes.")
+                return
+            vertices = extract_calibration_vertices(spoofed_csv_path, true_sizes)
+            self.calibration_vertices = {"calibration_vertices": vertices}
+
+            # Step 6: Export Vertices to JSON
+            with open(json_export_path, 'w') as f:
+                json.dump(self.calibration_vertices, f, indent=2)
+
+            messagebox.showinfo("Success", f"Calibration processing complete.\nVertices saved to:\n{json_export_path}")
+
+        except Exception as e:
+            messagebox.showerror("Processing Error", f"Failed to process calibration file:\n{e}")
+            
+            
     def build_plots_tab(self, notebook):
         self.tab_plots = ttk.Frame(notebook)
         notebook.add(self.tab_plots, text="Plots")
@@ -406,34 +422,6 @@ class UnifiedApp:
                 print(f"Failed to launch .NET SDK installation via winget: {e}")
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
 
-    def process_calibration_file(self):
-        cyz_path = self.calibration_file_entry.get().strip()
-        if not cyz_path or not cyz_path.lower().endswith('.cyz'):
-            messagebox.showerror("Error", "Please select a valid .cyz calibration file.")
-            return
-
-        # Define output paths
-        json_path = cyz_path.replace('.cyz', '_calib.json')
-        csv_path = cyz_path.replace('.cyz', '_calib.csv')
-
-        try:
-            # Apply cyz2json
-            load_file(self.path_entry.get(), cyz_path, json_path)  # path_entry holds cyz2json.dll path
-
-            # Convert JSON to CSV
-            to_listmode(json_path, csv_path)
-
-            # If spoof calibration is checked, apply spoofing
-            if self.spoof_calibration_var.get():
-                spoofed_csv_path = csv_path.replace('.csv', '_spoofed.csv')
-                spoof_calibration(csv_path, spoofed_csv_path)
-                messagebox.showinfo("Success", f"Calibration file processed and spoofed:\n{spoofed_csv_path}")
-            else:
-                messagebox.showinfo("Success", f"Calibration file processed:\n{csv_path}")
-
-        except Exception as e:
-            messagebox.showerror("Processing Error", f"Failed to process calibration file:\n{e}")
-
 
 
     def build_individual_labelling_tab(self):
@@ -457,42 +445,16 @@ class UnifiedApp:
             variable=self.spoof_calibration_var
         ).pack(pady=5)
 
-        # Process calibration file button
+        tk.Label(self.tab_individual_labelling, text="Enter true micron sizes for each of the 8 clusters (comma-separated):").pack(pady=5)
+        self.true_sizes_entry = tk.Entry(self.tab_individual_labelling, width=80)
+        self.true_sizes_entry.insert(0, "0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0")  # Predefined sizes
+        self.true_sizes_entry.pack(pady=5)
+
         tk.Button(
             self.tab_individual_labelling,
             text="Process Calibration File",
             command=self.process_calibration_file
         ).pack(pady=10)
-
-        tk.Button(
-            self.tab_individual_labelling,
-            text="Cluster Colour Bands",
-            command=self.cluster_colour_bands_ui
-        ).pack(pady=10)
-        
-        tk.Button(
-            self.tab_individual_labelling,
-            text="Plot Clusters Over Data",
-            command=self.plot_clusters_over_data_ui
-        ).pack(pady=10)        
-
-
-        tk.Label(self.tab_individual_labelling, text="Enter true micron sizes for each of the 8 clusters (comma-separated):").pack(pady=5)
-        default_sizes = "0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0"
-        self.true_sizes_entry = tk.Entry(self.tab_individual_labelling, width=80)
-        self.true_sizes_entry.insert(0, default_sizes)  # Pre-populate with defaults
-        self.true_sizes_entry.pack(pady=5)
-        tk.Button(
-            self.tab_individual_labelling,
-            text="Extract Calibration Vertices",
-            command=self.extract_calibration_vertices_ui
-        ).pack(pady=10)
-        tk.Button(
-            self.tab_individual_labelling,
-            text="Export Calibration Vertices as JSON",
-            command=self.export_calibration_vertices_json
-        ).pack(pady=5)
-
 
         # Sample file selection
         tk.Label(self.tab_individual_labelling, text="Select Sample File (.cyz):").pack(pady=5)
