@@ -173,6 +173,40 @@ def cluster_colour_bands(csv_path, n_clusters=8, output_path=None):
     }
 
 
+
+def extract_calibration_vertices(csv_path, true_sizes):
+    """
+    For the spoofed calibration file, for each cluster (from KMeans, n=8), compute the mean and std
+    for Fl Red_total, Fl Orange_total, Fl Yellow_total, and associate each with the user-supplied true size.
+    Returns a list of dicts (vertices).
+    """
+    df = pd.read_csv(csv_path)
+    required_cols = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total']
+    X = df[required_cols].values
+    kmeans = KMeans(n_clusters=8, random_state=42)
+    labels = kmeans.fit_predict(X)
+
+    # Sort clusters by mean Fl Red_total for consistent ordering
+    cluster_means = []
+    for cluster_id in range(8):
+        cluster_data = df[labels == cluster_id]
+        means = cluster_data[required_cols].mean().to_dict()
+        stds = cluster_data[required_cols].std().to_dict()
+        cluster_means.append((means['Fl Red_total'], cluster_id, means, stds))
+    cluster_means.sort()  # sort by Fl Red_total mean
+
+    # Build vertices with user-supplied true sizes
+    vertices = []
+    for i, (red_mean, cluster_id, means, stds) in enumerate(cluster_means):
+        vertex = {
+            "cluster_id": int(cluster_id),
+            "true_size": float(true_sizes[i]),
+            "means": {k: float(v) for k, v in means.items()},
+            "stds": {k: float(v) for k, v in stds.items()}
+        }
+        vertices.append(vertex)
+    return vertices
+    
 def plot_clusters_over_data(csv_path, cluster_centers):
     """
     Plots the spoofed calibration data and overlays the cluster centers for each pair of axes.
@@ -442,6 +476,24 @@ class UnifiedApp:
             command=self.plot_clusters_over_data_ui
         ).pack(pady=10)        
 
+
+        tk.Label(self.tab_individual_labelling, text="Enter true micron sizes for each of the 8 clusters (comma-separated):").pack(pady=5)
+        default_sizes = "0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0"
+        self.true_sizes_entry = tk.Entry(self.tab_individual_labelling, width=80)
+        self.true_sizes_entry.insert(0, default_sizes)  # Pre-populate with defaults
+        self.true_sizes_entry.pack(pady=5)
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Extract Calibration Vertices",
+            command=self.extract_calibration_vertices_ui
+        ).pack(pady=10)
+        tk.Button(
+            self.tab_individual_labelling,
+            text="Export Calibration Vertices as JSON",
+            command=self.export_calibration_vertices_json
+        ).pack(pady=5)
+
+
         # Sample file selection
         tk.Label(self.tab_individual_labelling, text="Select Sample File (.cyz):").pack(pady=5)
         self.sample_file_entry = tk.Entry(self.tab_individual_labelling, width=80)
@@ -452,6 +504,32 @@ class UnifiedApp:
             command=lambda: self.select_cyz_file(self.sample_file_entry)
         ).pack(pady=5)
         
+
+    def extract_calibration_vertices_ui(self):
+        try:
+            true_sizes = [float(x.strip()) for x in self.true_sizes_entry.get().split(',')]
+            if len(true_sizes) != 8:
+                messagebox.showerror("Input Error", "Please enter exactly 8 values for true sizes.")
+                return
+            csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
+            vertices = extract_calibration_vertices(csv_path, true_sizes)
+            self.calibration_vertices = {"calibration_vertices": vertices}
+            messagebox.showinfo("Calibration Vertices", "Calibration vertices extracted and stored in app.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to extract calibration vertices:\n{e}")
+
+    def export_calibration_vertices_json(self):
+        try:
+            if not hasattr(self, 'calibration_vertices'):
+                messagebox.showerror("Export Error", "No calibration vertices found. Extract them first.")
+                return
+            file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+            if file_path:
+                with open(file_path, 'w') as f:
+                    json.dump(self.calibration_vertices, f, indent=2)
+                messagebox.showinfo("Export", f"Calibration vertices exported to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export calibration vertices:\n{e}")
         
     def plot_clusters_over_data_ui(self):
         csv_path = self.calibration_file_entry.get().strip().replace('.cyz', '_calib_spoofed.csv')
