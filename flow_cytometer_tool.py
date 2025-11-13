@@ -709,7 +709,7 @@ class UnifiedApp:
             entry.insert(0, val if val is not None else "")
             entry.pack()
             entries[key] = entry
-
+            
         def add_dropdown(label, key, options, default=""):
             tk.Label(scroll_frame, text=label).pack()
             val = prev_label.get(key, default)
@@ -720,9 +720,11 @@ class UnifiedApp:
 
         # --- Main fields ---
         add_entry("Custom Note", "custom_note")
-        add_dropdown("Certainty", "certainty", ["High", "Medium", "Low"])
-        add_dropdown("Image Quality", "image_quality", ["High", "Medium", "Low"])
+        add_dropdown("Certainty", "certainty", ["user has not specified", "High", "Medium", "Low"], default="user has not specified")
+        add_dropdown("Image Quality", "image_quality", ["user has not specified", "High", "Medium", "Low"], default="user has not specified")
         add_dropdown("Class", "class", ["Organism", "Taxo_particle", "Non_taxo_particle"])
+        entries["certainty"].set("user has not specified")
+        entries["image_quality"].set("user has not specified")
 
         # --- Taxonomy fields (grouped) ---
         tk.Label(scroll_frame, text="Taxonomy (leave blank if not applicable)", font=("Arial", 10, "bold")).pack(pady=5)
