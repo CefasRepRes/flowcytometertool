@@ -465,7 +465,8 @@ class UnifiedApp:
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
 
 
-    def launch_sample_metadata_form(self):
+
+    def launch_sample_metadata_form(self, prefill=None):
         form = tk.Toplevel(self.root)
         form.title("Sample Metadata")
         form.geometry("500x700")
@@ -476,17 +477,18 @@ class UnifiedApp:
         def add_entry(label, key, default=""):
             tk.Label(form, text=label).pack()
             entry = tk.Entry(form, width=60)
-            entry.insert(0, default)
+            entry.insert(0, "" if default is None else default)
             entry.pack()
             entries[key] = entry
 
-        # Add fields (customize as needed)
-        add_entry("Location (latitude)", "latitude")
-        add_entry("Location (longitude)", "longitude")
-        add_entry("Location Approximate", "location_approximate")
-        add_entry("Timestamp (ISO8601)", "timestamp")
-        add_entry("Size (um)", "size_um")
-        add_entry("Source Vessel", "source_vessel")
+        # Use prefill or fallback to defaults
+        prefill = prefill or {}
+        add_entry("Location (latitude)", "latitude", prefill.get("latitude", ""))
+        add_entry("Location (longitude)", "longitude", prefill.get("longitude", ""))
+        add_entry("Location Approximate", "location_approximate", prefill.get("location_approximate", "UK Shelf Seas"))
+        add_entry("Timestamp (ISO8601)", "timestamp", prefill.get("timestamp", ""))
+        add_entry("Size (um)", "size_um", prefill.get("size_um", ""))
+        add_entry("Source Vessel", "source_vessel", prefill.get("source_vessel", "RV Cefas Endeavour"))
 
         def submit():
             self.sample_metadata = {
@@ -500,10 +502,10 @@ class UnifiedApp:
                 "source_vessel": entries["source_vessel"].get().strip() or None
             }
             form.destroy()
-            # Now start the image labelling workflow
             self.start_image_labelling_workflow()
 
         tk.Button(form, text="Submit", command=submit).pack(pady=20)
+
     
     def build_individual_labelling_tab(self):
         tk.Button(self.tab_individual_labelling, text="Download cyz2json", command=self.install_all_requirements).pack(pady=10)
@@ -591,6 +593,8 @@ class UnifiedApp:
             # Step 2: Extract images using listmode_particleswithimagesonly
             import listmode_particleswithimagesonly
             data = json.load(open(json_path, encoding="utf-8-sig"))
+            self.timestamp = data.get("instrument", {}).get("measurementResults", {}).get("start", "")
+
             # This will save images to images_dir and return particle info
             lines = listmode_particleswithimagesonly.extractimages(
                 particles=data["particles"],
@@ -880,7 +884,15 @@ class UnifiedApp:
             form.destroy()
             messagebox.showinfo("Success", "Labeller metadata collected successfully!")
             # Next step: start image labelling workflow
-            self.launch_sample_metadata_form()
+            prefill = {
+                "latitude": None,
+                "longitude": None,
+                "location_approximate": "UK Shelf Seas",
+                "timestamp": self.timestamp,
+                "size_um": None,
+                "source_vessel": "RV Cefas Endeavour"
+            }
+            self.launch_sample_metadata_form(prefill=prefill)
         tk.Button(form, text="Submit", command=submit).pack(pady=20)
             
     def start_image_labelling_workflow(self):
