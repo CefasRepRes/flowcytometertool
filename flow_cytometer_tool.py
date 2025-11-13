@@ -657,7 +657,7 @@ class UnifiedApp:
         img_label.image = tk_img
         img_label.pack(pady=10)
         
-
+                
         def validate_and_collect():
             for key in ["certainty", "image_quality", "class"]:
                 if not entries[key].get():
@@ -678,14 +678,8 @@ class UnifiedApp:
             if not any(attributes_dict.values()):
                 attributes_dict = None
 
+            # REMOVE meta_dict and meta_entries references!
 
-            meta_dict = {k: v.get().strip() or None for k, v in meta_entries.items()}
-            if meta_dict["size_um"]:
-                try:
-                    meta_dict["size_um"] = int(meta_dict["size_um"])
-                except ValueError:
-                    messagebox.showerror("Validation Error", "Size (um) must be an integer or blank.")
-                    return None
             label = {
                 "image_id": img_path,
                 "custom_note": entries["custom_note"].get().strip(),
@@ -696,7 +690,8 @@ class UnifiedApp:
                 "attributes": attributes_dict,
                 "metadata": self.sample_metadata  # Use the sample-level metadata for every image
             }
-            return label
+            return label        
+
 
         def save_and_next():
             label = validate_and_collect()
