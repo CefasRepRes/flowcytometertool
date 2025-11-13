@@ -131,9 +131,6 @@ def spoof_calibration(csv_path, output_path=None):
         balanced_rows.append(band_rows)
 
     balanced_df = pd.concat(balanced_rows, ignore_index=True)
-    if output_path is None:
-        base, ext = os.path.splitext(csv_path)
-        output_path = f"{base}_spoofed{ext}"
     balanced_df.to_csv(output_path, index=False)
     return output_path
 
@@ -193,14 +190,14 @@ def plot_clusters_over_data(csv_path, cluster_centers):
     ]
     for x, y, title in pairs:
         plt.figure(figsize=(7, 7))
-        plt.scatter(df[x], df[y], s=10, alpha=0.3, color='gray', label='Spoofed Data')
+        plt.scatter(df[x], df[y], s=10, alpha=0.3, color='gray', label='Data')
         idx_x = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total'].index(x)
         idx_y = ['Fl Red_total', 'Fl Orange_total', 'Fl Yellow_total'].index(y)
         plt.scatter(cluster_centers[:, idx_x], cluster_centers[:, idx_y],
                     s=120, c='red', marker='X', label='Cluster Centers')
         plt.xlabel(x)
         plt.ylabel(y)
-        plt.title(f'Cluster Centers over Spoofed Data: {title}')
+        plt.title(f'Cluster Centers over Data: {title}')
         plt.legend()
         plt.tight_layout()
         plt.show()
@@ -276,7 +273,6 @@ class UnifiedApp:
             # Paths
             json_path = cyz_path.replace('.cyz', '_calib.json')
             csv_path = cyz_path.replace('.cyz', '_calib.csv')
-            spoofed_csv_path = cyz_path.replace('.cyz', '_calib_spoofed.csv')
             json_export_path = cyz_path.replace('.cyz', '_calibration_vertices.json')
 
             # Step 1: Convert CYZ → JSON → CSV
@@ -286,26 +282,25 @@ class UnifiedApp:
 
             if self.spoof_calibration_var.get():
                 # User wants spoofing
-                spoofed_csv_path = cyz_path.replace('.cyz', '_calib_spoofed.csv')
-                spoof_calibration(csv_path, spoofed_csv_path)
-                clustering_input_csv = spoofed_csv_path
+                spoof_calibration(csv_path, csv_path)
+                clustering_input_csv = csv_path
             else:
                 # Use original CSV
                 clustering_input_csv = csv_path
 
             # Step 3: Perform Clustering
-            result = cluster_colour_bands(spoofed_csv_path, n_clusters=8)
+            result = cluster_colour_bands(csv_path, n_clusters=8)
             cluster_centers = result['all_centers']
 
-            # Step 4: Plot Spoofed Data with Cluster Centers
-            plot_clusters_over_data(spoofed_csv_path, cluster_centers)
+            # Step 4: Plot Data with Cluster Centers
+            plot_clusters_over_data(csv_path, cluster_centers)
 
             # Step 5: Extract Calibration Vertices
             true_sizes = [float(x.strip()) for x in self.true_sizes_entry.get().split(',')]
             if len(true_sizes) != 8:
                 messagebox.showerror("Input Error", "Please enter exactly 8 values for true sizes.")
                 return
-            vertices = extract_calibration_vertices(spoofed_csv_path, true_sizes)
+            vertices = extract_calibration_vertices(csv_path, true_sizes)
             self.calibration_vertices = {"calibration_vertices": vertices}
 
             # Step 6: Export Vertices to JSON
