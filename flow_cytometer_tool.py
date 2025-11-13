@@ -283,8 +283,15 @@ class UnifiedApp:
             load_file(self.path_entry.get(), cyz_path, json_path)
             to_listmode(json_path, csv_path)
 
-            # Step 2: Apply Spoof Calibration
-            spoof_calibration(csv_path, spoofed_csv_path)
+
+            if self.spoof_calibration_var.get():
+                # User wants spoofing
+                spoofed_csv_path = cyz_path.replace('.cyz', '_calib_spoofed.csv')
+                spoof_calibration(csv_path, spoofed_csv_path)
+                clustering_input_csv = spoofed_csv_path
+            else:
+                # Use original CSV
+                clustering_input_csv = csv_path
 
             # Step 3: Perform Clustering
             result = cluster_colour_bands(spoofed_csv_path, n_clusters=8)
