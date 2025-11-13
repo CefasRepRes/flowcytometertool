@@ -678,7 +678,6 @@ class UnifiedApp:
             if not any(attributes_dict.values()):
                 attributes_dict = None
 
-            # REMOVE meta_dict and meta_entries references!
 
             label = {
                 "image_id": img_path,
