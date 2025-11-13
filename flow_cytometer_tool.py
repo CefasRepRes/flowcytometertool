@@ -465,7 +465,46 @@ class UnifiedApp:
                 messagebox.showerror("Error", f"Failed to launch .NET SDK installation:\n{e}")
 
 
+    def launch_sample_metadata_form(self):
+        form = tk.Toplevel(self.root)
+        form.title("Sample Metadata")
+        form.geometry("500x700")
+        form.grab_set()
 
+        entries = {}
+
+        def add_entry(label, key, default=""):
+            tk.Label(form, text=label).pack()
+            entry = tk.Entry(form, width=60)
+            entry.insert(0, default)
+            entry.pack()
+            entries[key] = entry
+
+        # Add fields (customize as needed)
+        add_entry("Location (latitude)", "latitude")
+        add_entry("Location (longitude)", "longitude")
+        add_entry("Location Approximate", "location_approximate")
+        add_entry("Timestamp (ISO8601)", "timestamp")
+        add_entry("Size (um)", "size_um")
+        add_entry("Source Vessel", "source_vessel")
+
+        def submit():
+            self.sample_metadata = {
+                "location": {
+                    "latitude": entries["latitude"].get().strip() or None,
+                    "longitude": entries["longitude"].get().strip() or None
+                },
+                "location_approximate": entries["location_approximate"].get().strip() or None,
+                "timestamp": entries["timestamp"].get().strip() or None,
+                "size_um": int(entries["size_um"].get().strip()) if entries["size_um"].get().strip() else None,
+                "source_vessel": entries["source_vessel"].get().strip() or None
+            }
+            form.destroy()
+            # Now start the image labelling workflow
+            self.start_image_labelling_workflow()
+
+        tk.Button(form, text="Submit", command=submit).pack(pady=20)
+    
     def build_individual_labelling_tab(self):
         tk.Button(self.tab_individual_labelling, text="Download cyz2json", command=self.install_all_requirements).pack(pady=10)
 
@@ -635,10 +674,7 @@ class UnifiedApp:
             if not any(attributes_dict.values()):
                 attributes_dict = None
 
-            location = {
-                "latitude": lat_entry.get().strip() or None,
-                "longitude": lon_entry.get().strip() or None
-            }
+
             meta_dict = {k: v.get().strip() or None for k, v in meta_entries.items()}
             if meta_dict["size_um"]:
                 try:
@@ -646,7 +682,6 @@ class UnifiedApp:
                 except ValueError:
                     messagebox.showerror("Validation Error", "Size (um) must be an integer or blank.")
                     return None
-
             label = {
                 "image_id": img_path,
                 "custom_note": entries["custom_note"].get().strip(),
@@ -655,13 +690,7 @@ class UnifiedApp:
                 "class": entries["class"].get(),
                 "taxonomy": taxonomy_dict,
                 "attributes": attributes_dict,
-                "metadata": {
-                    "location": location,
-                    "location_approximate": meta_dict["location_approximate"],
-                    "timestamp": meta_dict["timestamp"],
-                    "size_um": meta_dict["size_um"],
-                    "source_vessel": meta_dict["source_vessel"]
-                }
+                "metadata": self.sample_metadata  # Use the sample-level metadata for every image
             }
             return label
 
@@ -695,10 +724,12 @@ class UnifiedApp:
                 self.show_labelling_form()
 
         def save_session():
+        
             session_json = {
                 "labeller": self.labeller_info,
                 "samplefile": self.samplefile_info,
                 "calibrationfile": self.calibrationfile_info,
+                "sample_metadata": self.sample_metadata,  # Add this line
                 "labels": self.labels
             }
             file_path = filedialog.asksaveasfilename(defaultextension=".json")
@@ -765,32 +796,6 @@ class UnifiedApp:
             entry.pack()
             attributes_entries[key] = entry
 
-        # --- Metadata fields (grouped) ---
-        tk.Label(scroll_frame, text="Metadata", font=("Arial", 10, "bold")).pack(pady=5)
-        metadata = prev_label.get("metadata", {}) if prev_label.get("metadata") else {}
-        # Location (lat/lon)
-        tk.Label(scroll_frame, text="Location (latitude)").pack()
-        lat_entry = tk.Entry(scroll_frame, width=60)
-        lat_entry.insert(0, metadata.get("location", {}).get("latitude", ""))
-        lat_entry.pack()
-        tk.Label(scroll_frame, text="Location (longitude)").pack()
-        lon_entry = tk.Entry(scroll_frame, width=60)
-        lon_entry.insert(0, metadata.get("location", {}).get("longitude", ""))
-        lon_entry.pack()
-        # Other metadata fields
-        meta_entries = {}
-        for label, key in [
-            ("Location Approximate", "location_approximate"),
-            ("Timestamp (ISO8601)", "timestamp"),
-            ("Size (um)", "size_um"),
-            ("Source Vessel", "source_vessel")
-        ]:
-            tk.Label(scroll_frame, text=label).pack()
-            val = metadata.get(key, "")
-            entry = tk.Entry(scroll_frame, width=60)
-            entry.insert(0, val if val is not None else "")
-            entry.pack()
-            meta_entries[key] = entry
 
 
 
@@ -808,8 +813,8 @@ class UnifiedApp:
     # Define start_labelling_session method
     def start_labelling_session(self):
         # This will launch the labeller metadata form and then image labelling workflow
+        self.launch_labeller_metadata_form()  # We'll implement this next  
         messagebox.showinfo("Labelling Session", "Starting interactive labelling session...")
-        self.launch_labeller_metadata_form()  # We'll implement this next        
         
     def launch_labeller_metadata_form(self):
         # Create modal window
@@ -875,8 +880,7 @@ class UnifiedApp:
             form.destroy()
             messagebox.showinfo("Success", "Labeller metadata collected successfully!")
             # Next step: start image labelling workflow
-            self.start_image_labelling_workflow()
-
+            self.launch_sample_metadata_form()
         tk.Button(form, text="Submit", command=submit).pack(pady=20)
             
     def start_image_labelling_workflow(self):
