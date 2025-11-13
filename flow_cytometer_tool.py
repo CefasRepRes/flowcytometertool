@@ -636,11 +636,11 @@ class UnifiedApp:
         # --- Main window ---
         form = tk.Toplevel(self.root)
         form.title(f"Labelling Image {idx+1} of {len(self.image_list)}")
-        form.geometry("900x1200")
+        form.geometry("1100x1100")
         form.grab_set()
 
         # --- Scrollable frame setup ---
-        canvas = tk.Canvas(form, borderwidth=0, width=880, height=1100)
+        canvas = tk.Canvas(form, borderwidth=0, width=1180, height=880)
         vscroll = tk.Scrollbar(form, orient="vertical", command=canvas.yview)
         scroll_frame = tk.Frame(canvas)
         scroll_frame.bind(
@@ -652,103 +652,54 @@ class UnifiedApp:
         canvas.pack(side="left", fill="both", expand=True)
         vscroll.pack(side="right", fill="y")
 
-        # --- Display Image ---
+        # --- Horizontal frame for image and plot ---
+        image_plot_frame = tk.Frame(scroll_frame)
+        image_plot_frame.pack(pady=10, fill='x')
+
+        # --- Display Image (left) ---
         img = Image.open(img_path)
         img.thumbnail((400, 400))
         tk_img = ImageTk.PhotoImage(img)
-        img_label = tk.Label(scroll_frame, image=tk_img)
+        img_label = tk.Label(image_plot_frame, image=tk_img)
         img_label.image = tk_img
-        img_label.pack(pady=10)
-        
-                
-        def validate_and_collect():
-            for key in ["certainty", "image_quality", "class"]:
-                if not entries[key].get():
-                    messagebox.showerror("Validation Error", f"{key.replace('_', ' ').capitalize()} is required.")
-                    return None
+        img_label.pack(side='left', padx=10, pady=10)
 
-            taxonomy_dict = {k: v.get().strip() for k, v in taxonomy_entries.items()}
-            if taxonomy_dict["aphia_id"]:
-                try:
-                    taxonomy_dict["aphia_id"] = int(taxonomy_dict["aphia_id"])
-                except ValueError:
-                    messagebox.showerror("Validation Error", "Aphia ID must be an integer or blank.")
-                    return None
-            else:
-                taxonomy_dict = None if not any(taxonomy_entries[k].get().strip() for k in taxonomy_entries) else taxonomy_dict
+        # --- Display Matplotlib Plot (right) ---
+        plot_frame = tk.Frame(image_plot_frame)
+        plot_frame.pack(side='right', padx=10, pady=10)
 
-            attributes_dict = {k: v.get().strip() or None for k, v in attributes_entries.items()}
-            if not any(attributes_dict.values()):
-                attributes_dict = None
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.scatter(
+            self.df_particles['Fl Red_total'],
+            self.df_particles['Fl Yellow_total'],
+            c='gray', s=10, alpha=0.5, label='Particles'
+        )
+        ax.scatter(
+            [self.df_particles.loc[idx, 'Fl Red_total']],
+            [self.df_particles.loc[idx, 'Fl Yellow_total']],
+            c='red', s=60, marker='x', label='Current'
+        )
+        ax.set_xlabel('Fl Red_total')
+        ax.set_ylabel('Fl Yellow_total')
+        ax.set_title('Red vs Yellow')
+        ax.legend()
 
+        mpl_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+        mpl_canvas.get_tk_widget().pack()
 
-            label = {
-                "image_id": img_path,
-                "custom_note": entries["custom_note"].get().strip(),
-                "certainty": entries["certainty"].get(),
-                "image_quality": entries["image_quality"].get(),
-                "class": entries["class"].get(),
-                "taxonomy": taxonomy_dict,
-                "attributes": attributes_dict,
-                "metadata": self.sample_metadata  # Use the sample-level metadata for every image
-            }
-            return label        
-
-
-        def save_and_next():
-            label = validate_and_collect()
-            if label is None:
+        def on_click(event):
+            if event.inaxes != ax:
                 return
-            self.labels[idx] = label
+            x, y = event.xdata, event.ydata
+            dists = ((self.df_particles['Fl Red_total'] - x)**2 +
+                     (self.df_particles['Fl Yellow_total'] - y)**2)
+            nearest_idx = dists.idxmin()
+            self.current_image_index = nearest_idx
             form.destroy()
-            if idx < len(self.image_list) - 1:
-                self.current_image_index += 1
-                self.show_labelling_form()
-            else:
-                messagebox.showinfo("Done", "You have labelled all images!")
+            self.show_labelling_form()
+        mpl_canvas.mpl_connect('button_press_event', on_click)
 
-        def save_and_prev():
-            label = validate_and_collect()
-            if label is None:
-                return
-            self.labels[idx] = label
-            form.destroy()
-            if idx > 0:
-                self.current_image_index -= 1
-                self.show_labelling_form()
-
-        def skip():
-            self.labels[idx] = {}  # Or mark as skipped if you wish
-            form.destroy()
-            if idx < len(self.image_list) - 1:
-                self.current_image_index += 1
-                self.show_labelling_form()
-
-        def save_session():
-        
-            session_json = {
-                "labeller": self.labeller_info,
-                "samplefile": self.samplefile_info,
-                "calibrationfile": self.calibrationfile_info,
-                "sample_metadata": self.sample_metadata,  # Add this line
-                "labels": self.labels
-            }
-            file_path = filedialog.asksaveasfilename(defaultextension=".json")
-            if file_path:
-                with open(file_path, "w") as f:
-                    json.dump(session_json, f, indent=2)
-                messagebox.showinfo("Saved", f"Session saved to {file_path}")
-
-                # --- Navigation and Save ---
-        nav_frame = tk.Frame(scroll_frame)
-        nav_frame.pack(pady=20)
-
-        tk.Button(nav_frame, text="Previous", command=save_and_prev).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Skip", command=skip).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Next", command=save_and_next).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Save Session", command=save_session).pack(side=tk.RIGHT, padx=10)
-        
-        # --- Helper functions for fields ---
+        # --- Form fields below the image/plot row ---
         entries = {}
 
         def add_entry(label, key, default=""):
@@ -789,7 +740,7 @@ class UnifiedApp:
         tk.Label(scroll_frame, text="Attributes", font=("Arial", 10, "bold")).pack(pady=5)
         attributes = prev_label.get("attributes", {}) if prev_label.get("attributes") else {}
         attributes_entries = {}
-        for label, key in [("Life Stage", "life_stage"), ("Body Part", "body_part"), ("Egg Sac", "egg_sac"), ("Posture", "posture")]:
+        for label, key in [("Life Stage", "life_stage"), ("Body Part", "body_part")]:
             tk.Label(scroll_frame, text=label).pack()
             val = attributes.get(key, "")
             entry = tk.Entry(scroll_frame, width=60)
@@ -797,46 +748,86 @@ class UnifiedApp:
             entry.pack()
             attributes_entries[key] = entry
 
+        # --- Navigation and Save ---
+        nav_frame = tk.Frame(scroll_frame)
+        nav_frame.pack(pady=20)
+        tk.Button(nav_frame, text="Previous", command=lambda: save_and_prev()).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Skip", command=lambda: skip()).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Next", command=lambda: save_and_next()).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Save Session", command=lambda: save_session()).pack(side=tk.RIGHT, padx=10)
 
-        plot_frame = tk.Frame(scroll_frame)
-        plot_frame.pack(pady=10)
+        # --- Validation and navigation logic ---
+        def validate_and_collect():
+            for key in ["certainty", "image_quality", "class"]:
+                if not entries[key].get():
+                    messagebox.showerror("Validation Error", f"{key.replace('_', ' ').capitalize()} is required.")
+                    return None
+            taxonomy_dict = {k: v.get().strip() for k, v in taxonomy_entries.items()}
+            if taxonomy_dict["aphia_id"]:
+                try:
+                    taxonomy_dict["aphia_id"] = int(taxonomy_dict["aphia_id"])
+                except ValueError:
+                    messagebox.showerror("Validation Error", "Aphia ID must be an integer or blank.")
+                    return None
+            else:
+                taxonomy_dict = None if not any(taxonomy_entries[k].get().strip() for k in taxonomy_entries) else taxonomy_dict
+            attributes_dict = {k: v.get().strip() or None for k, v in attributes_entries.items()}
+            if not any(attributes_dict.values()):
+                attributes_dict = None
+            label = {
+                "image_id": img_path,
+                "custom_note": entries["custom_note"].get().strip(),
+                "certainty": entries["certainty"].get(),
+                "image_quality": entries["image_quality"].get(),
+                "class": entries["class"].get(),
+                "taxonomy": taxonomy_dict,
+                "attributes": attributes_dict,
+                "metadata": self.sample_metadata  # Use the sample-level metadata for every image
+            }
+            return label
 
-        fig, ax = plt.subplots(figsize=(4, 4))
-        ax.scatter(
-            self.df_particles['Fl Red_total'],
-            self.df_particles['Fl Yellow_total'],
-            c='gray', s=10, alpha=0.5, label='Particles'
-        )
-        idx = self.current_image_index
-        ax.scatter(
-            [self.df_particles.loc[idx, 'Fl Red_total']],
-            [self.df_particles.loc[idx, 'Fl Yellow_total']],
-            c='red', s=60, marker='x', label='Current'
-        )
-        ax.set_xlabel('Fl Red_total')
-        ax.set_ylabel('Fl Yellow_total')
-        ax.set_title('Red vs Yellow')
-        ax.legend()
-
-        mpl_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        mpl_canvas.get_tk_widget().pack()
-        
-
-        def on_click(event):
-            if event.inaxes != ax:
+        def save_and_next():
+            label = validate_and_collect()
+            if label is None:
                 return
-            x, y = event.xdata, event.ydata
-            dists = ((self.df_particles['Fl Red_total'] - x)**2 +
-                     (self.df_particles['Fl Yellow_total'] - y)**2)
-            nearest_idx = dists.idxmin()
-            self.current_image_index = nearest_idx
+            self.labels[idx] = label
             form.destroy()
-            self.show_labelling_form()
+            if idx < len(self.image_list) - 1:
+                self.current_image_index += 1
+                self.show_labelling_form()
+            else:
+                messagebox.showinfo("Done", "You have labelled all images!")
 
-        fig.mpl_canvas.mpl_connect('button_press_event', on_click)
+        def save_and_prev():
+            label = validate_and_collect()
+            if label is None:
+                return
+            self.labels[idx] = label
+            form.destroy()
+            if idx > 0:
+                self.current_image_index -= 1
+                self.show_labelling_form()
 
+        def skip():
+            self.labels[idx] = {}  # Or mark as skipped if you wish
+            form.destroy()
+            if idx < len(self.image_list) - 1:
+                self.current_image_index += 1
+                self.show_labelling_form()
 
-
+        def save_session():
+            session_json = {
+                "labeller": self.labeller_info,
+                "samplefile": self.samplefile_info,
+                "calibrationfile": self.calibrationfile_info,
+                "sample_metadata": self.sample_metadata,
+                "labels": self.labels
+            }
+            file_path = filedialog.asksaveasfilename(defaultextension=".json")
+            if file_path:
+                with open(file_path, "w") as f:
+                    json.dump(session_json, f, indent=2)
+                messagebox.showinfo("Saved", f"Session saved to {file_path}")
 
 
 
@@ -851,8 +842,7 @@ class UnifiedApp:
     # Define start_labelling_session method
     def start_labelling_session(self):
         # This will launch the labeller metadata form and then image labelling workflow
-        self.launch_labeller_metadata_form()  # We'll implement this next  
-        messagebox.showinfo("Labelling Session", "Starting interactive labelling session...")
+        self.launch_labeller_metadata_form()
         
     def launch_labeller_metadata_form(self):
         # Create modal window
@@ -916,7 +906,6 @@ class UnifiedApp:
 
             # Close form
             form.destroy()
-            messagebox.showinfo("Success", "Labeller metadata collected successfully!")
             # Next step: start image labelling workflow
             prefill = {
                 "latitude": None,
