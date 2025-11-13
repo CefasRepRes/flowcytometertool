@@ -603,6 +603,9 @@ class UnifiedApp:
                 save_images_to=images_dir
             )
 
+            self.df_particles = pd.DataFrame(lines)
+
+
             # Step 3: Display images for labelling (you may want to launch your MetadataUI here)
             # Example: Launch a new window for labelling
             from metadata_ui import MetadataUI
@@ -794,6 +797,43 @@ class UnifiedApp:
             entry.pack()
             attributes_entries[key] = entry
 
+
+        plot_frame = tk.Frame(scroll_frame)
+        plot_frame.pack(pady=10)
+
+        fig, ax = plt.subplots(figsize=(4, 4))
+        ax.scatter(
+            self.df_particles['Fl Red_total'],
+            self.df_particles['Fl Yellow_total'],
+            c='gray', s=10, alpha=0.5, label='Particles'
+        )
+        idx = self.current_image_index
+        ax.scatter(
+            [self.df_particles.loc[idx, 'Fl Red_total']],
+            [self.df_particles.loc[idx, 'Fl Yellow_total']],
+            c='red', s=60, marker='x', label='Current'
+        )
+        ax.set_xlabel('Fl Red_total')
+        ax.set_ylabel('Fl Yellow_total')
+        ax.set_title('Red vs Yellow')
+        ax.legend()
+
+        mpl_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+        mpl_canvas.get_tk_widget().pack()
+        
+
+        def on_click(event):
+            if event.inaxes != ax:
+                return
+            x, y = event.xdata, event.ydata
+            dists = ((self.df_particles['Fl Red_total'] - x)**2 +
+                     (self.df_particles['Fl Yellow_total'] - y)**2)
+            nearest_idx = dists.idxmin()
+            self.current_image_index = nearest_idx
+            form.destroy()
+            self.show_labelling_form()
+
+        fig.mpl_canvas.mpl_connect('button_press_event', on_click)
 
 
 
