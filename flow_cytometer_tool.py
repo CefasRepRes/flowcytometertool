@@ -611,91 +611,7 @@ class UnifiedApp:
         img_label = tk.Label(scroll_frame, image=tk_img)
         img_label.image = tk_img
         img_label.pack(pady=10)
-
-        tk.Button(nav_frame, text="Previous", command=save_and_prev).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Skip", command=skip).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Next", command=save_and_next).pack(side=tk.LEFT, padx=10)
-        tk.Button(nav_frame, text="Save Session", command=save_session).pack(side=tk.RIGHT, padx=10)
         
-        # --- Helper functions for fields ---
-        entries = {}
-
-        def add_entry(label, key, default=""):
-            tk.Label(scroll_frame, text=label).pack()
-            val = prev_label.get(key, default)
-            entry = tk.Entry(scroll_frame, width=60)
-            entry.insert(0, val if val is not None else "")
-            entry.pack()
-            entries[key] = entry
-
-        def add_dropdown(label, key, options, default=""):
-            tk.Label(scroll_frame, text=label).pack()
-            val = prev_label.get(key, default)
-            var = tk.StringVar(value=val if val else options[0])
-            dropdown = ttk.Combobox(scroll_frame, textvariable=var, values=options, state="readonly", width=57)
-            dropdown.pack()
-            entries[key] = dropdown
-
-        # --- Main fields ---
-        add_entry("Custom Note", "custom_note")
-        add_dropdown("Certainty", "certainty", ["High", "Medium", "Low"])
-        add_dropdown("Image Quality", "image_quality", ["High", "Medium", "Low"])
-        add_dropdown("Class", "class", ["Organism", "Taxo_particle", "Non_taxo_particle"])
-
-        # --- Taxonomy fields (grouped) ---
-        tk.Label(scroll_frame, text="Taxonomy (leave blank if not applicable)", font=("Arial", 10, "bold")).pack(pady=5)
-        taxonomy = prev_label.get("taxonomy", {}) if prev_label.get("taxonomy") else {}
-        taxonomy_entries = {}
-        for label, key in [("Aphia ID", "aphia_id"), ("Scientific Name", "scientific_name"), ("Taxonomic Rank", "taxonomic_rank")]:
-            tk.Label(scroll_frame, text=label).pack()
-            val = taxonomy.get(key, "")
-            entry = tk.Entry(scroll_frame, width=60)
-            entry.insert(0, val if val is not None else "")
-            entry.pack()
-            taxonomy_entries[key] = entry
-
-        # --- Attributes fields (grouped) ---
-        tk.Label(scroll_frame, text="Attributes", font=("Arial", 10, "bold")).pack(pady=5)
-        attributes = prev_label.get("attributes", {}) if prev_label.get("attributes") else {}
-        attributes_entries = {}
-        for label, key in [("Life Stage", "life_stage"), ("Body Part", "body_part"), ("Egg Sac", "egg_sac"), ("Posture", "posture")]:
-            tk.Label(scroll_frame, text=label).pack()
-            val = attributes.get(key, "")
-            entry = tk.Entry(scroll_frame, width=60)
-            entry.insert(0, val if val is not None else "")
-            entry.pack()
-            attributes_entries[key] = entry
-
-        # --- Metadata fields (grouped) ---
-        tk.Label(scroll_frame, text="Metadata", font=("Arial", 10, "bold")).pack(pady=5)
-        metadata = prev_label.get("metadata", {}) if prev_label.get("metadata") else {}
-        # Location (lat/lon)
-        tk.Label(scroll_frame, text="Location (latitude)").pack()
-        lat_entry = tk.Entry(scroll_frame, width=60)
-        lat_entry.insert(0, metadata.get("location", {}).get("latitude", ""))
-        lat_entry.pack()
-        tk.Label(scroll_frame, text="Location (longitude)").pack()
-        lon_entry = tk.Entry(scroll_frame, width=60)
-        lon_entry.insert(0, metadata.get("location", {}).get("longitude", ""))
-        lon_entry.pack()
-        # Other metadata fields
-        meta_entries = {}
-        for label, key in [
-            ("Location Approximate", "location_approximate"),
-            ("Timestamp (ISO8601)", "timestamp"),
-            ("Size (um)", "size_um"),
-            ("Source Vessel", "source_vessel")
-        ]:
-            tk.Label(scroll_frame, text=label).pack()
-            val = metadata.get(key, "")
-            entry = tk.Entry(scroll_frame, width=60)
-            entry.insert(0, val if val is not None else "")
-            entry.pack()
-            meta_entries[key] = entry
-
-        # --- Navigation and Save ---
-        nav_frame = tk.Frame(scroll_frame)
-        nav_frame.pack(pady=20)
 
         def validate_and_collect():
             for key in ["certainty", "image_quality", "class"]:
@@ -788,6 +704,92 @@ class UnifiedApp:
                 with open(file_path, "w") as f:
                     json.dump(session_json, f, indent=2)
                 messagebox.showinfo("Saved", f"Session saved to {file_path}")
+
+                # --- Navigation and Save ---
+        nav_frame = tk.Frame(scroll_frame)
+        nav_frame.pack(pady=20)
+
+        tk.Button(nav_frame, text="Previous", command=save_and_prev).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Skip", command=skip).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Next", command=save_and_next).pack(side=tk.LEFT, padx=10)
+        tk.Button(nav_frame, text="Save Session", command=save_session).pack(side=tk.RIGHT, padx=10)
+        
+        # --- Helper functions for fields ---
+        entries = {}
+
+        def add_entry(label, key, default=""):
+            tk.Label(scroll_frame, text=label).pack()
+            val = prev_label.get(key, default)
+            entry = tk.Entry(scroll_frame, width=60)
+            entry.insert(0, val if val is not None else "")
+            entry.pack()
+            entries[key] = entry
+
+        def add_dropdown(label, key, options, default=""):
+            tk.Label(scroll_frame, text=label).pack()
+            val = prev_label.get(key, default)
+            var = tk.StringVar(value=val if val else options[0])
+            dropdown = ttk.Combobox(scroll_frame, textvariable=var, values=options, state="readonly", width=57)
+            dropdown.pack()
+            entries[key] = dropdown
+
+        # --- Main fields ---
+        add_entry("Custom Note", "custom_note")
+        add_dropdown("Certainty", "certainty", ["High", "Medium", "Low"])
+        add_dropdown("Image Quality", "image_quality", ["High", "Medium", "Low"])
+        add_dropdown("Class", "class", ["Organism", "Taxo_particle", "Non_taxo_particle"])
+
+        # --- Taxonomy fields (grouped) ---
+        tk.Label(scroll_frame, text="Taxonomy (leave blank if not applicable)", font=("Arial", 10, "bold")).pack(pady=5)
+        taxonomy = prev_label.get("taxonomy", {}) if prev_label.get("taxonomy") else {}
+        taxonomy_entries = {}
+        for label, key in [("Aphia ID", "aphia_id"), ("Scientific Name", "scientific_name"), ("Taxonomic Rank", "taxonomic_rank")]:
+            tk.Label(scroll_frame, text=label).pack()
+            val = taxonomy.get(key, "")
+            entry = tk.Entry(scroll_frame, width=60)
+            entry.insert(0, val if val is not None else "")
+            entry.pack()
+            taxonomy_entries[key] = entry
+
+        # --- Attributes fields (grouped) ---
+        tk.Label(scroll_frame, text="Attributes", font=("Arial", 10, "bold")).pack(pady=5)
+        attributes = prev_label.get("attributes", {}) if prev_label.get("attributes") else {}
+        attributes_entries = {}
+        for label, key in [("Life Stage", "life_stage"), ("Body Part", "body_part"), ("Egg Sac", "egg_sac"), ("Posture", "posture")]:
+            tk.Label(scroll_frame, text=label).pack()
+            val = attributes.get(key, "")
+            entry = tk.Entry(scroll_frame, width=60)
+            entry.insert(0, val if val is not None else "")
+            entry.pack()
+            attributes_entries[key] = entry
+
+        # --- Metadata fields (grouped) ---
+        tk.Label(scroll_frame, text="Metadata", font=("Arial", 10, "bold")).pack(pady=5)
+        metadata = prev_label.get("metadata", {}) if prev_label.get("metadata") else {}
+        # Location (lat/lon)
+        tk.Label(scroll_frame, text="Location (latitude)").pack()
+        lat_entry = tk.Entry(scroll_frame, width=60)
+        lat_entry.insert(0, metadata.get("location", {}).get("latitude", ""))
+        lat_entry.pack()
+        tk.Label(scroll_frame, text="Location (longitude)").pack()
+        lon_entry = tk.Entry(scroll_frame, width=60)
+        lon_entry.insert(0, metadata.get("location", {}).get("longitude", ""))
+        lon_entry.pack()
+        # Other metadata fields
+        meta_entries = {}
+        for label, key in [
+            ("Location Approximate", "location_approximate"),
+            ("Timestamp (ISO8601)", "timestamp"),
+            ("Size (um)", "size_um"),
+            ("Source Vessel", "source_vessel")
+        ]:
+            tk.Label(scroll_frame, text=label).pack()
+            val = metadata.get(key, "")
+            entry = tk.Entry(scroll_frame, width=60)
+            entry.insert(0, val if val is not None else "")
+            entry.pack()
+            meta_entries[key] = entry
+
 
 
 
