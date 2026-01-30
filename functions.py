@@ -16,7 +16,7 @@ import shutil
 from tkinter import simpledialog, ttk
 from azure.storage.blob import ContainerClient, BlobServiceClient
 import joblib
-from datetime import datetime
+import datetime
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.lines import Line2D
 from matplotlib.widgets import PolygonSelector
@@ -36,7 +36,7 @@ from watchdog.events import FileSystemEventHandler
 from tkinter import filedialog
 import tempfile
 import sys
-
+import time
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -61,7 +61,25 @@ def stratified_subsample(df, target_column, max_per_class=1000):
     return df.groupby(target_column, group_keys=False).apply(lambda x: x.sample(min(len(x), max_per_class), random_state=42)).reset_index(drop=True)
 
 
-def train_model(df, plots_dir, model_path, nogui=False, self = None, max_per_class = 100000):
+def compile_cyz2json(clone_dir, path_entry):
+    """Clone and compile the cyz2json tool."""
+    if os.path.exists(clone_dir):
+        messagebox.showinfo("Info", "cyz2json already exists in " + clone_dir)
+        return
+
+    try:
+        subprocess.run(["git", "clone", "https://github.com/OBAMANEXT/cyz2json.git", clone_dir], check=True)
+        subprocess.run(["dotnet", "build", "-o", "bin"], cwd=clone_dir, check=True)
+        path_entry.delete(0, tk.END)
+        path_entry.insert(0, os.path.join(clone_dir, "bin", "Cyz2Json.dll"))
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Compilation Error", f"Failed to compile cyz2json: {e}. Have you installed the requirement DotNet version 8.0? See https://github.com/OBAMANEXT/cyz2json")
+    except Exception as e:
+        messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+
+
+def train_model(df, plots_dir, model_path, nogui=False, self = None, calibration_enabled = False, max_per_class = 100000):
     try:
         if df is None:
             if nogui:
@@ -70,7 +88,7 @@ def train_model(df, plots_dir, model_path, nogui=False, self = None, max_per_cla
                 from tkinter import messagebox
                 messagebox.showerror("Error", "No data to train on.")
             return
-        train_classifier(df, plots_dir, model_path, max_per_class)
+        train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled)
         if nogui:
             print("Model training completed successfully.")
         else:
@@ -117,7 +135,7 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, expertise_matrix_path, nogui=False):
+def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None):
     if nogui:
         zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -134,13 +152,13 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False):
 
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
-        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices)
-        combined_df['source_label'] = [
-            re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
-        ]
-        combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
-        print('Cleaned group names to something consistent')
-        print("Cleaned source labels:", list(set(combined_df['source_label'])))
+        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
+        #combined_df['source_label'] = [
+        #    re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
+        #]
+        #combined_df.loc[combined_df['source_label'] == 'nophyto', 'source_label'] = 'nophytoplankton'
+        #print('Cleaned group names to something consistent')
+        #print("Cleaned source labels:", list(set(combined_df['source_label'])))
         print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
         combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
         if combined_df is not None and not combined_df.empty:
@@ -233,7 +251,22 @@ class FileHandler(FileSystemEventHandler):
             listmode_file = os.path.join(self.output_folder, base_filename.replace(".cyz", ".csv"))
             predictions_file = os.path.join(self.output_folder, base_filename.replace(".cyz", "_predictions.csv"))
 
-            load_file(self.cyz2json_path, file_path, json_file)
+            if not wait_for_file_release(file_path):
+                log_message(f"Timeout: File still locked after waiting: {file_path}")
+                return
+
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    load_file(self.cyz2json_path, file_path, json_file)
+                    break
+                except Exception as e:
+                    log_message(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(4)
+                    else:
+                        raise
+
             log_message(f"Success: Cyz2json applied {file_path}")
             to_listmode(json_file, listmode_file)
             instrument_file = os.path.join(self.output_folder, f"{base_filename}_instrument.csv")
@@ -352,6 +385,17 @@ def download_file(url, tool_dir, filename):
     except requests.RequestException as e:
         log_message(f"Download Error: Failed to download file: {e}")
         return None
+
+
+def wait_for_file_release(file_path, timeout=30, interval=1):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with open(file_path, 'rb'):
+                return True
+        except IOError:
+            time.sleep(interval)
+    return False
 
 def load_file(cyz2json_path, downloaded_file, json_file):
     try:
@@ -511,7 +555,7 @@ def compute_consensual_labels_and_sample_weights(data):
 
 
 
-def build_consensual_dataset(base_path, expertise_levels, zonechoice):
+def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None):
     """
     Build a consensual dataset from flow cytometry CSV files.
     
@@ -550,6 +594,10 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice):
         return None
     
     combined_df = pd.concat(all_data, ignore_index=True)
+    
+    if prompt_merge_fn is not None:
+        prompt_merge_fn(combined_df)
+    
     combined_df.columns = combined_df.columns.str.replace(r'\s+', '_', regex=True)
     combined_df = combined_df.dropna()
     print(combined_df)
@@ -684,7 +732,7 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
 
 
 
-def train_classifier(df, plots_dir, model_path, max_per_class):
+def train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled = False):
     df = stratified_subsample(df, target_column="source_label", max_per_class=max_per_class)
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
     cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
@@ -711,10 +759,11 @@ def train_classifier(df, plots_dir, model_path, max_per_class):
         filename_cvResults=os.path.join(os.path.dirname(model_path),"cv_results" + os.path.basename(model_path) + ".csv"),
         filename_learningCurve=os.path.join(os.path.dirname(model_path),"learning_curve" + os.path.basename(model_path) + ".csv"),
         filename_finalFittedModel=model_path,
-        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path),'calibrated_' + os.path.basename(model_path)),
+        filename_finalCalibratedModel=os.path.join(os.path.dirname(model_path), f"final_model_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.probabilistic_pkl"),
         filename_importance = os.path.join(os.path.dirname(model_path), "permutation_importance_" + os.path.basename(model_path) + ".csv"),
         validation_set = test_df,
-        plots_dir = plots_dir        
+        plots_dir = plots_dir,
+        calibration_enabled = calibration_enabled
     )
 
     # Evaluate on test set
@@ -1054,7 +1103,7 @@ def run_backend_only():
     cyz2json_dir = os.path.join(tool_dir, "cyz2json")
     model_dir = os.path.join(tool_dir, "models")
     plots_dir = os.path.join(tool_dir, "plots")
-    model_path = os.path.join(model_dir, "final_model.pkl")
+    model_path = os.path.join(model_dir, f'final_model_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pkl')
     os.makedirs(plots_dir, exist_ok=True)
     os.makedirs(download_path, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)

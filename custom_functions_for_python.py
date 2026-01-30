@@ -32,6 +32,9 @@ from sklearn.model_selection import StratifiedKFold
 import glob
 import joblib
 import datetime
+import pickle
+
+
 ################################################################################
 ############################# Custom Functions #################################
 ################################################################################
@@ -90,7 +93,7 @@ def createParametersList(logreg_clf, svm_clf, rf_clf, hgb_clf):
   # Random Forest
   MTRY = uniform(0.1, 0.9)
   SAMPLE_FRACTION = uniform(0.1, 0.9)
-  NTREES = uniform_int(100, 900)
+  NTREES = uniform_int(10, 100)
   # Histogram-based Gradient Boosting
   MAX_DEPTH = uniform_int(1, 14)
   MAX_FEATURES = uniform(0.1, 0.9)
@@ -344,10 +347,10 @@ def calibrateClassifier(fitted_final_classifier, validation_set, target_name, gr
   timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
   filename_finalCalibratedModel = os.path.join(os.path.dirname(filename_finalCalibratedModel), f"final_model_{timestamp}.probabilistic_pkl")
   
-  joblib.dump(fitted_calibrated_classifier, filename_finalCalibratedModel)
   
   calibration_stop_time = time() - calibration_start_time
   print(f"Done ! Time elapsed : {calibration_stop_time} s \n")
+  return fitted_calibrated_classifier
 
 
 
@@ -422,7 +425,7 @@ def getFinalResults(fitted_final_classifier):
   print(f"The final Classifier is : \n {fitted_final_classifier}")
 
 
-def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve, filename_importance, plots_dir):
+def buildSupervisedClassifier(training_set, validation_set, target_name, group_name, weight_name, select_K, cores, n_sizes, filename_cvResults, filename_finalFittedModel, filename_finalCalibratedModel, filename_learningCurve, filename_importance, plots_dir, calibration_enabled = False):
   """Function that runs the entire supervised classifier building process by calling the other custom functions"""
   # Set the random state for reproducibility
   rng = np.random.RandomState(42)
@@ -460,8 +463,12 @@ def buildSupervisedClassifier(training_set, validation_set, target_name, group_n
     scorer=scorer,
     plots_path = plots_dir
   )  
-  # Calibrate the classifier
-  calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
+  
+  if calibration_enabled:
+    # Calibrate the classifier
+    calibratedclassifier = calibrateClassifier(fitted_final_classifier, validation_set, target_name, group_name, weight_name, cores, filename_finalCalibratedModel)
+    with open(filename_finalCalibratedModel, 'wb') as f:
+      pickle.dump(calibratedclassifier, f)
 
 
 ########################## Apply Supervised Classifier #########################
