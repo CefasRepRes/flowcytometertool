@@ -990,7 +990,7 @@ class UnifiedApp:
     def generate_mixfile(self):
         try:
             container = self.url_entry_blob.get().strip()
-            print(container)
+            #print(container)
             sas_token_path = self.sas_token_entry.get().strip()
             sample_rate = float(self.sample_rate_entry.get().strip())
             sas_token = get_sas_token(sas_token_path)
@@ -1228,7 +1228,7 @@ class UnifiedApp:
         # Container URLs
         tk.Label(self.tab_blob_tools, text="Blob Container URL:").pack(pady=5)
         self.url_entry_blob = tk.Entry(self.tab_blob_tools, width=100)
-        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploadnov2024")
+        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploaddec2025")
         self.url_entry_blob.pack(pady=5)
         
         tk.Label(self.tab_blob_tools, text="Output Container Name:").pack(pady=5)
@@ -1250,7 +1250,7 @@ class UnifiedApp:
 
         tk.Label(self.tab_process_blob, text="Blob Container URL:").pack(pady=5)
         self.url_entry_blob = tk.Entry(self.tab_process_blob, width=100)
-        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploadnov2024")
+        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploaddec2025")
         self.url_entry_blob.pack(pady=5)
 
         tk.Button(self.tab_process_blob, text="Generate Mixfile", command=self.generate_mixfile).pack(pady=5)
@@ -1411,10 +1411,12 @@ class UnifiedApp:
     def process_all(self):
         container = self.url_entry_blob.get().strip()#
         output_blob_folder = self.output_blob_folder.get().strip()
-        print(container)
+        #print(container)
         container_url = self.url_entry_blob.get().strip()
         sas_token_path = self.sas_token_entry.get().strip()
         sas_token = get_sas_token(sas_token_path)
+        #print(container_url)
+        #print(sas_token)
         blob_files = list_blobs(container_url, sas_token)
         processed_files = set()
         log_file_path = "process_log.txt"
@@ -1438,6 +1440,7 @@ class UnifiedApp:
                 except Exception as e:
                     log_message(f"No file to delete: {e} (this is fine)")
             try:
+                #print(url)
                 downloaded_file = download_file(url, self.tool_dir, self.cyz_file)
                 log_message(f"Success: Blob downloaded for {url_notoken}")
                 load_file(self.path_entry.get(), downloaded_file, self.json_file)
