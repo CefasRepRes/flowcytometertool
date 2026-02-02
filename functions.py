@@ -153,6 +153,10 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
         combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
+        #print("set(list(combined_df['source_label']))")
+        #print(set(list(combined_df['source_label'])))
+        #print("set(list(combined_df['consensus_label']))")
+        #print(set(list(combined_df['consensus_label'])))
         #combined_df['source_label'] = [
         #    re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
         #]
