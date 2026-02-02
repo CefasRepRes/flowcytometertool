@@ -30,6 +30,5 @@ dependencies:
       - psutil==6.0.0
       - azure-core==1.32.0
       - azure-storage-blob==12.24.1
-      - azure-identity==1.25.1
       - watchdog==6.0.0
 prefix: /home/runner/miniforge3/envs/flowcytometertool
