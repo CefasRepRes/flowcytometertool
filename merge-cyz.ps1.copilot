@@ -1,0 +1,54 @@
+# --- SETTINGS ---
+$Root        = 'C:\Users\JR13\Documents\flowcytometertool\downloadeddata\ESTUARINEUK\EXP5'
+$OutputCsv   = 'C:\Users\JR13\Downloads\EXP5_merged.csv'
+$NewColName  = 'Label'
+
+# --- START FRESH OUTPUT ---
+if (Test-Path -LiteralPath $OutputCsv) {
+    Remove-Item -LiteralPath $OutputCsv -Force
+}
+
+# --- GET SOURCE FILES ---
+$files = Get-ChildItem -Path $Root -Recurse -File -Filter '*.cyz.csv' | Sort-Object FullName
+
+if (-not $files -or $files.Count -eq 0) {
+    Write-Warning "No files ending with '.cyz.csv' were found under: $Root"
+    return
+}
+
+$first = $true
+$processed = 0
+
+foreach ($file in $files) {
+    try {
+        # Example name:
+        #   Mersey_LV01_9 2024-02-21 12h27_Beads_rest.cyz.csv
+        # BaseName is:
+        #   Mersey_LV01_9 2024-02-21 12h27_Beads_rest.cyz
+        # Remove trailing ".cyz" then split into 4 parts on "_"
+        # Take the last part => "Beads_rest"
+        $baseNoCyz = ($file.BaseName -replace '\.cyz$','')
+        $segment   = ($baseNoCyz -split '_', 4)[-1]
+
+        # Load, add derived column, export/append
+        $data = Import-Csv -Path $file.FullName
+        $dataWithLabel = $data | Select-Object *, @{ Name = $NewColName; Expression = { $segment } }
+
+        if ($first) {
+            # First write includes header
+            $dataWithLabel | Export-Csv -Path $OutputCsv -NoTypeInformation -Encoding UTF8
+            $first = $false
+        } else {
+            # Append rows only
+            $dataWithLabel | Export-Csv -Path $OutputCsv -NoTypeInformation -Encoding UTF8 -Append
+        }
+
+        $processed++
+    }
+    catch {
+        Write-Warning ("Failed processing '{0}': {1}" -f $file.FullName, $_.Exception.Message)
+        continue
+    }
+}
+
+Write-Host ("Merged {0} file(s) into: {1}" -f $processed, $OutputCsv)
