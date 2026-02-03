@@ -739,13 +739,17 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
 def train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled = False):
     df = stratified_subsample(df, target_column="source_label", max_per_class=max_per_class)
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
-    cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
+    cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]] #cleaned_df = df[["source_label","group","weight","Fl_Yellow_total",  "Fl_Red_total",  "Fl_Orange_total"]]
+    print('cleaned_df.columns')
+    print(cleaned_df.columns)
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
     # Detect if running on Linux
     is_linux = platform.system().lower() == "linux"
     # Set cores to 1 if on Linux (to avoid joblib memory leak from actions workflow) or frozen executable which similarly does not seem to work parallelised
     cores = 1 if is_frozen or is_linux else os.cpu_count()
+    print('cores:')
+    print(cores)
 
     
     # Split the data
