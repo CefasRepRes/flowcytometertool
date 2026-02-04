@@ -610,7 +610,7 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
                                        "flowcytometertool", "Training plots",
                                        "premerge_3d_fluorescence.html")
             os.makedirs(os.path.dirname(default_out), exist_ok=True)
-            fws_plot_3d_fluorescence_premerge(
+            plot_3d_fluorescence_premerge(
                 combined_df, label_col="source_label", out_html=default_out
             )
     except Exception as e:
@@ -1051,7 +1051,7 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
 
 
 
-def fws_plot_3d_fluorescence_premerge(df, label_col, out_html):
+def plot_3d_fluorescence_premerge(df, label_col, out_html):
     """
     Create a 3D fluorescence scatter of the raw (pre-merge) training data.
     Colors and shapes by `label_col` to inform merging decisions.
@@ -1180,7 +1180,7 @@ def fws_plot_3d_fluorescence_premerge(df, label_col, out_html):
     return out_html
 
 
-def plot_3d_fluorescence_premerge(
+def FWS_size_plot_3d_fluorescence_premerge(
     df,
     label_col,
     out_html,
