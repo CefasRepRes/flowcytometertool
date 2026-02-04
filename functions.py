@@ -37,6 +37,7 @@ from tkinter import filedialog
 import tempfile
 import sys
 import time
+import webbrowser
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -135,7 +136,7 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None):
+def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None, premerge_plot_fn = None):
     if nogui:
         zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -152,7 +153,7 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
 
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
-        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
+        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn, premerge_plot_fn)
         #print("set(list(combined_df['source_label']))")
         #print(set(list(combined_df['source_label'])))
         #print("set(list(combined_df['consensus_label']))")
@@ -559,7 +560,7 @@ def compute_consensual_labels_and_sample_weights(data):
 
 
 
-def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None):
+def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None, premerge_plot_fn=None):
     """
     Build a consensual dataset from flow cytometry CSV files.
     
@@ -599,6 +600,22 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     
     combined_df = pd.concat(all_data, ignore_index=True)
     
+    try:
+        if premerge_plot_fn is not None:
+            premerge_plot_fn(combined_df)
+        else:
+            # default behavior if no callback was provided:
+            # save next to the working directory as a one-off
+            default_out = os.path.join(os.path.expanduser("~"), "Documents",
+                                       "flowcytometertool", "Training plots",
+                                       "premerge_3d_fluorescence.html")
+            os.makedirs(os.path.dirname(default_out), exist_ok=True)
+            plot_3d_fluorescence_premerge(
+                combined_df, label_col="source_label", out_html=default_out
+            )
+    except Exception as e:
+        print(f"[warn] pre-merge 3D plot not created: {e}")
+
     if prompt_merge_fn is not None:
         prompt_merge_fn(combined_df)
     
@@ -1028,6 +1045,134 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
         for image, data in metadata.items():
             writer.writerow([image, data["confidence"], data["species"]])
 
+def plot_3d_fluorescence_premerge(df, label_col, out_html):
+    """
+    Create a 3D fluorescence scatter of the raw (pre-merge) training data.
+    Colors and shapes by `label_col` to inform merging decisions.
+    Adds legend entries per class for quick filtering.
+    """
+    import os
+    import numpy as np
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import webbrowser
+
+    # Accept either spaced, underscored, or dotted column names
+    candidate_names = [
+        ("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
+        ("Fl_Yellow_total", "Fl_Red_total", "Fl_Orange_total"),
+        ("Fl Yellow_total", "Fl Red_total", "Fl.Orange_total"),
+        ("Fl.Yellow_total", "Fl.Red_total", "Fl.Orange_total"),
+    ]
+    triplet = None
+    for cand in candidate_names:
+        if all(c in df.columns for c in cand):
+            triplet = cand
+            break
+    if triplet is None:
+        raise ValueError(
+            "Could not find fluorescence columns. "
+            "Looked for variants of Yellow/Red/Orange *_total."
+        )
+    fx, fy, fz = triplet
+
+    # Keep required columns; drop rows with missing values
+    work = df[[fx, fy, fz, label_col]].dropna().copy()
+
+    # Downsample for responsiveness (tweak if needed)
+    max_points = 120_000
+    if len(work) > max_points:
+        work = work.sample(n=max_points, random_state=42)
+
+    # Axis clipping at 99.5th percentile (like your overlap tool)
+    x99 = np.percentile(work[fx], 99.5)
+    y99 = np.percentile(work[fy], 99.5)
+    z99 = np.percentile(work[fz], 99.5)
+
+    # Deterministic color palette (simple HUSL-like wheel)
+    classes = sorted(work[label_col].astype(str).unique())
+    def husl_palette(n):
+        return [f"hsl({int(360*i/n)}, 65%, 50%)" for i in range(n)]
+    palette = husl_palette(len(classes))
+    color_map = dict(zip(classes, palette))
+    work["_color"] = work[label_col].astype(str).map(color_map)
+
+    # 🔷 Symbol cycling (broad set; friendly to 3D scatter)
+    base_symbols = ['circle', 'circle-open', 'cross', 'diamond',
+            'diamond-open', 'square', 'square-open', 'x']
+            
+    # Repeat/cycle to cover all classes
+    sym_list = (base_symbols * ((len(classes) // len(base_symbols)) + 1))[:len(classes)]
+    symbol_map = dict(zip(classes, sym_list))
+    work["_symbol"] = work[label_col].astype(str).map(symbol_map)
+
+    # One big data trace (fast) with per-point colors & symbols
+    scatter = go.Scatter3d(
+        x=work[fx],
+        y=work[fy],
+        z=work[fz],
+        mode="markers",
+        marker=dict(
+            size=3,
+            color=work["_color"],
+            symbol=work["_symbol"],
+            opacity=0.65,
+            line=dict(width=0.3, color="rgba(20,20,20,0.4)")
+        ),
+        text=work[label_col].astype(str),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            f"{fx}: %{{x:.2f}}<br>"
+            f"{fy}: %{{y:.2f}}<br>"
+            f"{fz}: %{{z:.2f}}<br>"
+            "<extra></extra>"
+        ),
+        name="Raw training points",
+        showlegend=False  # legend handled by tiny class traces below
+    )
+
+    # Legend entries: one tiny invisible-in-scene trace per class
+    legend_traces = []
+    for cls in classes:
+        legend_traces.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None],
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=color_map[cls],
+                    symbol=symbol_map[cls],
+                    line=dict(width=1, color="rgba(20,20,20,0.6)")
+                ),
+                name=str(cls),
+                showlegend=True
+            )
+        )
+
+    fig = go.Figure(data=[scatter] + legend_traces)
+    fig.update_layout(
+        title=f"3D Fluorescence (pre-merge) — colored by {label_col}",
+        height=800,
+        scene=dict(
+            xaxis=dict(range=[0, x99], title=fx),
+            yaxis=dict(range=[0, y99], title=fy),
+            zaxis=dict(range=[0, z99], title=fz),
+            camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.5))
+        ),
+        legend=dict(
+            title="Classes",
+            itemsizing="trace",
+            x=0.02, y=0.98,
+            bgcolor="rgba(255,255,255,0.6)"
+        ),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+
+    # Save + auto-open
+    pio.write_html(fig, file=out_html, auto_open=False)
+    webbrowser.open("file://" + os.path.abspath(out_html))
+    return out_html
+
 
 def plot3d(predictions_file):
     data = pd.read_csv(predictions_file)
@@ -1136,7 +1281,7 @@ def run_backend_only():
 
         # 5. Combine CSVs
         print("📊 Combining CSV files...")
-        df = combine_csvs(output_path, expertise_matrix_path, nogui=True)
+        df = combine_csvs(output_path, expertise_matrix_path, nogui=True, premerge_plot_fn= False)
         if df is None:
             print("⚠️ No CSV files found.")
             return

@@ -1000,7 +1000,17 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping)
+        def _premerge_plot_callback(raw_df):
+            out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+            try:
+                from functions import plot_3d_fluorescence_premerge  # uses same columns as inspect_overlap
+                plot_3d_fluorescence_premerge(raw_df, label_col="source_label", out_html=out_html)
+                # make sure the Plots tab list sees the new file (it watches .png, so we also log info)
+                functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+            except Exception as e:
+                functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
+        self.df = functions.combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping, premerge_plot_fn=_premerge_plot_callback)
 
     def prompt_class_grouping(self,df):
         if df is None or 'source_label' not in df.columns:

@@ -885,3 +885,20 @@ File not found: C:\Users\JR13/Documents/flowcytometertool/Measurement_Odontella 
 File not found: C:\Users\JR13/Documents/flowcytometertool/Measurement_Odontella 2024-02-29 11h22.cyz_instrument.csv
 File not found: C:\Users\JR13/Documents/flowcytometertool/Measurement_Odontella 2024-02-29 11h22.cyz_predictions.csv
 File not found: C:\Users\JR13/Documents/flowcytometertool/Measurement_Odontella 2024-02-29 11h22.cyz_predictions.csv_counts.csv
+[warn] could not write pre-merge 3D plot: name 'x' is not defined
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
