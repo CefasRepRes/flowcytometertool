@@ -907,3 +907,8 @@ Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertoo
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+[warn] could not write pre-merge 3D plot: Could not find fluorescence columns. Looked for variants of Yellow/Red/Orange *_total.
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+[warn] could not write pre-merge 3D plot: Could not find SWS/side-scatter column. Tried: SWS_total, SWS total, SWS.total, Side Scatter_total, SideScatter_total, SSC_total, SSC total, SSC.total
+[warn] could not write pre-merge 3D plot: name 'x' is not defined
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html

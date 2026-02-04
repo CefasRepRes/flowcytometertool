@@ -610,7 +610,7 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
                                        "flowcytometertool", "Training plots",
                                        "premerge_3d_fluorescence.html")
             os.makedirs(os.path.dirname(default_out), exist_ok=True)
-            plot_3d_fluorescence_premerge(
+            fws_plot_3d_fluorescence_premerge(
                 combined_df, label_col="source_label", out_html=default_out
             )
     except Exception as e:
@@ -1048,7 +1048,10 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
         for image, data in metadata.items():
             writer.writerow([image, data["confidence"], data["species"]])
 
-def plot_3d_fluorescence_premerge(df, label_col, out_html):
+
+
+
+def fws_plot_3d_fluorescence_premerge(df, label_col, out_html):
     """
     Create a 3D fluorescence scatter of the raw (pre-merge) training data.
     Colors and shapes by `label_col` to inform merging decisions.
@@ -1062,10 +1065,10 @@ def plot_3d_fluorescence_premerge(df, label_col, out_html):
 
     # Accept either spaced, underscored, or dotted column names
     candidate_names = [
-        ("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
-        ("Fl_Yellow_total", "Fl_Red_total", "Fl_Orange_total"),
-        ("Fl Yellow_total", "Fl Red_total", "Fl.Orange_total"),
-        ("Fl.Yellow_total", "Fl.Red_total", "Fl.Orange_total"),
+        ("FWS_total", "Fl Red_total", "Fl Orange_total"),
+        ("FWS_total", "Fl_Red_total", "Fl_Orange_total"),
+        ("FWS_total", "Fl Red_total", "Fl.Orange_total"),
+        ("FWS_total", "Fl.Red_total", "Fl.Orange_total"),
     ]
     triplet = None
     for cand in candidate_names:
@@ -1172,6 +1175,183 @@ def plot_3d_fluorescence_premerge(df, label_col, out_html):
     )
 
     # Save + auto-open
+    pio.write_html(fig, file=out_html, auto_open=False)
+    webbrowser.open("file://" + os.path.abspath(out_html))
+    return out_html
+
+
+def plot_3d_fluorescence_premerge(
+    df,
+    label_col,
+    out_html,
+    *,
+    size_log=True,          # log-scale SWS sizes for better spread
+    size_min=2,             # minimum marker size (px)
+    size_max=10,            # maximum marker size (px)
+    size_clip_pct=99.0      # clip SWS at this percentile before scaling
+):
+    """
+    Create a 3D fluorescence scatter of the raw (pre-merge) training data.
+    Colors and shapes by `label_col` to inform merging decisions.
+    Marker size is driven by a fourth variable: total SWS.
+    Adds legend entries per class for quick filtering.
+    """
+    import os
+    import numpy as np
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import webbrowser
+
+    # --- Accept either spaced, underscored, or dotted column names for fluorescence ---
+    fl_candidate_triplets = [
+        ("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
+        ("Fl_Yellow_total", "Fl_Red_total", "Fl_Orange_total"),
+        ("Fl Yellow_total", "Fl Red_total", "Fl.Orange_total"),
+        ("Fl.Yellow_total", "Fl.Red_total", "Fl.Orange_total"),
+    ]
+    triplet = None
+    for cand in fl_candidate_triplets:
+        if all(c in df.columns for c in cand):
+            triplet = cand
+            break
+    if triplet is None:
+        raise ValueError(
+            "Could not find fluorescence columns. "
+            "Looked for variants of Yellow/Red/Orange *_total."
+        )
+    fx, fy, fz = triplet
+
+    # --- Fourth variable (SWS) for marker size: try common variants ---
+    sws_candidates = [ "FWS_total"    ]
+    size_col = None
+    for c in sws_candidates:
+        if c in df.columns:
+            size_col = c
+            break
+    if size_col is None:
+        raise ValueError(
+            "Could not find SWS/side-scatter column. "
+            "Tried: " + ", ".join(sws_candidates)
+        )
+
+    # --- Keep required columns; drop rows with missing values ---
+    work = df[[fx, fy, fz, size_col, label_col]].dropna().copy()
+
+    # --- Downsample for responsiveness (tweak if needed) ---
+    max_points = 120_000
+    if len(work) > max_points:
+        work = work.sample(n=max_points, random_state=42)
+
+    # --- Axis clipping at 99.5th percentile (like your overlap tool) ---
+    x99 = np.percentile(work[fx], 99.5)
+    y99 = np.percentile(work[fy], 99.5)
+    z99 = np.percentile(work[fz], 99.5)
+
+    # --- Compute marker sizes from SWS ---
+    sws_vals = work[size_col].astype(float).to_numpy()
+    upper = np.percentile(sws_vals, size_clip_pct)  # robust upper-clip
+    sws_clipped = np.minimum(sws_vals, upper)
+
+    if size_log:
+        sws_trans = np.log10(1.0 + np.maximum(sws_clipped, 0.0))
+    else:
+        sws_trans = np.maximum(sws_clipped, 0.0)
+
+    vmin = float(np.min(sws_trans))
+    vmax = float(np.max(sws_trans))
+    if vmax > vmin:
+        sizes = size_min + (sws_trans - vmin) * (size_max - size_min) / (vmax - vmin)
+    else:
+        sizes = np.full_like(sws_trans, (size_min + size_max) / 2.0)
+
+    # --- Deterministic color palette (simple HUSL-like wheel) ---
+    classes = sorted(work[label_col].astype(str).unique())
+
+    def husl_palette(n):
+        return [f"hsl({int(360*i/n)}, 65%, 50%)" for i in range(n)]
+
+    palette = husl_palette(len(classes))
+    color_map = dict(zip(classes, palette))
+    work["_color"] = work[label_col].astype(str).map(color_map)
+
+    # --- Symbol cycling ---
+    base_symbols = [
+        "circle", "circle-open", "cross", "diamond",
+        "diamond-open", "square", "square-open", "x"
+    ]
+    sym_list = (base_symbols * ((len(classes) // len(base_symbols)) + 1))[:len(classes)]
+    symbol_map = dict(zip(classes, sym_list))
+    work["_symbol"] = work[label_col].astype(str).map(symbol_map)
+
+    # --- Main data trace ---
+    scatter = go.Scatter3d(
+        x=work[fx],
+        y=work[fy],
+        z=work[fz],
+        mode="markers",
+        marker=dict(
+            size=sizes,                  # <- size from SWS
+            color=work["_color"],
+            symbol=work["_symbol"],
+            opacity=0.65,
+            line=dict(width=0.3, color="rgba(20,20,20,0.4)")
+        ),
+        text=work[label_col].astype(str),
+        # IMPORTANT: escape Plotly placeholders in f-strings using DOUBLE BRACES
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            f"{fx}: %{{x:.2f}}<br>"
+            f"{fy}: %{{y:.2f}}<br>"
+            f"{fz}: %{{z:.2f}}<br>"
+            f"{size_col} (scaled): %{{marker.size:.2f}} px<br>"
+            "<extra></extra>"
+        ),
+        name="Raw training points",
+        showlegend=False
+    )
+
+    # --- Legend entries: class-only traces ---
+    legend_traces = []
+    for cls in classes:
+        legend_traces.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None],
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=color_map[cls],
+                    symbol=symbol_map[cls],
+                    line=dict(width=1, color="rgba(20,20,20,0.6)")
+                ),
+                name=str(cls),
+                showlegend=True
+            )
+        )
+
+    title_suffix = (
+        f" — colored by {label_col}, size by {size_col}"
+        + (" (log scaled)" if size_log else "")
+    )
+
+    fig = go.Figure(data=[scatter] + legend_traces)
+    fig.update_layout(
+        title=f"3D Fluorescence (pre-merge){title_suffix}",
+        height=800,
+        scene=dict(
+            xaxis=dict(range=[0, x99], title=fx),
+            yaxis=dict(range=[0, y99], title=fy),
+            zaxis=dict(range=[0, z99], title=fz),
+            camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.5))
+        ),
+        legend=dict(
+            title="Classes",
+            itemsizing="trace",
+            x=0.02, y=0.98,
+            bgcolor="rgba(255,255,255,0.6)"
+        ),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+
     pio.write_html(fig, file=out_html, auto_open=False)
     webbrowser.open("file://" + os.path.abspath(out_html))
     return out_html
