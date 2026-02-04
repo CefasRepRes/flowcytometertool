@@ -263,6 +263,36 @@ class UnifiedApp:
         self.json_file = os.path.join(self.tool_dir, "tempfile.json")
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
 
+    def prompt_delete_labels(self, df):
+        import tkinter as tk
+        from tkinter import messagebox
+
+        labels = sorted(df['source_label'].dropna().unique())
+        if not labels:
+            return
+
+        top = tk.Toplevel(self.root)
+        top.title("Delete Label Groups")
+
+        listbox = tk.Listbox(top, selectmode=tk.MULTIPLE, width=50, height=30)
+        for label in labels:
+            listbox.insert(tk.END, label)
+        listbox.pack(padx=10, pady=10)
+
+        def do_delete():
+            indexes = listbox.curselection()
+            if not indexes:
+                top.destroy()
+                return
+            selected = [labels[i] for i in indexes]
+            df.drop(df[df['source_label'].isin(selected)].index, inplace=True)
+            messagebox.showinfo("Deleted", f"Removed: {selected}")
+            top.destroy()
+
+        tk.Button(top, text="Delete selected", command=do_delete).pack(pady=10)
+        top.grab_set()
+        self.root.wait_window(top)        
+
     def process_calibration_file(self):
         try:
             cyz_path = self.calibration_file_entry.get().strip()
@@ -1010,7 +1040,7 @@ class UnifiedApp:
             except Exception as e:
                 functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
 
-        self.df = functions.combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping, premerge_plot_fn=_premerge_plot_callback)
+        self.df = functions.combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping, premerge_plot_fn=_premerge_plot_callback, delete_labels_fn=self.prompt_delete_labels)
 
     def prompt_class_grouping(self,df):
         if df is None or 'source_label' not in df.columns:

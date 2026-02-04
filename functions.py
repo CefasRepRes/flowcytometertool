@@ -136,7 +136,7 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None, premerge_plot_fn = None):
+def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None, premerge_plot_fn = None, delete_labels_fn=None):
     if nogui:
         zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -153,7 +153,7 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
 
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
-        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn, premerge_plot_fn)
+        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn, premerge_plot_fn, delete_labels_fn)
         #print("set(list(combined_df['source_label']))")
         #print(set(list(combined_df['source_label'])))
         #print("set(list(combined_df['consensus_label']))")
@@ -560,7 +560,7 @@ def compute_consensual_labels_and_sample_weights(data):
 
 
 
-def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None, premerge_plot_fn=None):
+def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None, premerge_plot_fn=None, delete_labels_fn=None):
     """
     Build a consensual dataset from flow cytometry CSV files.
     
@@ -615,6 +615,9 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
             )
     except Exception as e:
         print(f"[warn] pre-merge 3D plot not created: {e}")
+
+    if delete_labels_fn is not None:
+        delete_labels_fn(combined_df)
 
     if prompt_merge_fn is not None:
         prompt_merge_fn(combined_df)
