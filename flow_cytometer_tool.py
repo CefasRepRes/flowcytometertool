@@ -269,6 +269,13 @@ class UnifiedApp:
             return
         try:
             from functions import nn_homogenize_df, plot_3d_fluorescence_premerge
+
+            out_html = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
+            plot_3d_fluorescence_premerge(
+                self.df,
+                label_col="source_label",
+                out_html=out_html
+            )
             # Clean the df
             cleaned_df = nn_homogenize_df(
                 self.df,
@@ -278,15 +285,15 @@ class UnifiedApp:
                 downsample_n=None
             )
             # Plot cleaned result
-            out_html = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
+            self.df = cleaned_df
+            out_html2 = os.path.join(self.plots_dir, "post_nn_cleaning_3d2.html")
             plot_3d_fluorescence_premerge(
-                cleaned_df,
+                self.df,
                 label_col="source_label",
-                out_html=out_html
-            )
+                out_html=out_html2
+            )            
             functions.log_message(f"NN-cleaned 3D plot written: {out_html}")
             # Update stored df (optional)
-            self.df = cleaned_df
             messagebox.showinfo("NN Cleaning Complete", f"Done! Cleaned df has {len(cleaned_df)} rows.")
             # Refresh visualisation controls
             self.refresh_comboboxes()
