@@ -263,6 +263,36 @@ class UnifiedApp:
         self.json_file = os.path.join(self.tool_dir, "tempfile.json")
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
 
+    def handle_nn_cleaning(self):
+        if self.df is None:
+            messagebox.showerror("Error", "No dataset loaded. Combine CSVs first.")
+            return
+        try:
+            from functions import nn_homogenize_df, plot_3d_fluorescence_premerge
+            # Clean the df
+            cleaned_df = nn_homogenize_df(
+                self.df,
+                label_col="source_label",
+                feature_cols=("FWS_total", "Fl_Red_total", "Fl_Orange_total"),
+                keep_unconsidered="keep",
+                downsample_n=None
+            )
+            # Plot cleaned result
+            out_html = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
+            plot_3d_fluorescence_premerge(
+                cleaned_df,
+                label_col="source_label",
+                out_html=out_html
+            )
+            functions.log_message(f"NN-cleaned 3D plot written: {out_html}")
+            # Update stored df (optional)
+            self.df = cleaned_df
+            messagebox.showinfo("NN Cleaning Complete", f"Done! Cleaned df has {len(cleaned_df)} rows.")
+            # Refresh visualisation controls
+            self.refresh_comboboxes()
+        except Exception as e:
+            messagebox.showerror("NN Cleaning Error", f"Failed during NN cleaning: {e}")
+
     def prompt_delete_labels(self, df):
         import tkinter as tk
         from tkinter import messagebox
@@ -1029,6 +1059,33 @@ class UnifiedApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
+
+    def _premerge_plot_callback(raw_df):
+        out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+
+        try:
+            # If the UI checkbox is ON → clean before plotting
+            if self.nn_clean_var.get():
+                from functions import nn_homogenize_df
+                raw_df = nn_homogenize_df(
+                    raw_df,
+                    label_col="source_label",
+                    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+                    keep_unconsidered="keep",
+                    downsample_n=None
+                )
+
+            # ALWAYS use your existing plot function
+            from functions import plot_3d_fluorescence_premerge
+            plot_3d_fluorescence_premerge(
+                raw_df, label_col="source_label", out_html=out_html
+            )
+
+            functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+
+        except Exception as e:
+            functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
     def handle_combine_csvs(self):
         # Version with NN cleaning in the 3 most important feature axes
         def _nn_cleaned_premerge_plot_callback(raw_df):
@@ -1068,7 +1125,7 @@ class UnifiedApp:
             expertise_matrix_path,
             nogui=False,
             prompt_merge_fn=self.prompt_class_grouping,
-            premerge_plot_fn= _nn_cleaned_premerge_plot_callback,  
+            premerge_plot_fn= _premerge_plot_callback,  
             delete_labels_fn=self.prompt_delete_labels
         )
 
@@ -1233,8 +1290,9 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         self.nn_clean_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning before pre-merge plot",variable=self.nn_clean_var).pack(pady=5)
+        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning pre-merge",variable=self.nn_clean_var).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
+        tk.Button(    self.tab_download,    text="Run NN Cleaning",    command=self.handle_nn_cleaning).pack(pady=5)
         tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
         self.max_per_class_entry.insert(0, "100000")

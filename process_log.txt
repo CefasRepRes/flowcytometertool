@@ -2223,3 +2223,11 @@ Success: Blob downloaded and inferences made for https://citprodflowcytosa.blob.
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
 Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+NN-cleaned 3D plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\post_nn_cleaning_3d.html
+Pre-merge 3D fluorescence plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\premerge_3d_fluorescence.html
+NN-cleaned 3D plot written: C:\Users\JR13/Documents/flowcytometertool/Training plots\post_nn_cleaning_3d.html
