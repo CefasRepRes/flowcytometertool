@@ -207,6 +207,30 @@ def nn_homogenize_df(
     import numpy as np
     import pandas as pd
 
+    def _normalise_for_nn(df_eval, feature_cols):
+        """
+        Return a normalised numpy array for use inside the NN distance calculation.
+        Uses robust scaling: (x - median) / MAD   (fallback to IQR if MAD=0).
+        """
+        import numpy as np
+        X = df_eval[list(feature_cols)].to_numpy(float)
+        Xn = np.zeros_like(X)
+
+        for i, col in enumerate(feature_cols):
+            v = X[:, i]
+            med = np.median(v)
+            mad = np.median(np.abs(v - med))
+
+            if mad > 0:
+                Xn[:, i] = (v - med) / mad
+            else:
+                # fallback: robust IQR scaling
+                lo, hi = np.percentile(v, [2.5, 97.5])
+                rng = hi - lo if hi > lo else 1.0
+                Xn[:, i] = (v - med) / rng
+
+        return Xn
+
     if len(feature_cols) != 3:
         raise ValueError("feature_cols must be a 3-tuple (x, y, z).")
     fx, fy, fz = feature_cols
@@ -226,7 +250,7 @@ def nn_homogenize_df(
     if downsample_n is not None and len(df_eval) > downsample_n:
         df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
 
-    X = df_eval[[fx, fy, fz]].to_numpy(float)
+    X = _normalise_for_nn(df_eval, (fx, fy, fz))
     y = df_eval[label_col].astype(str).to_numpy()
 
     def nearest_neighbour_indices(points):

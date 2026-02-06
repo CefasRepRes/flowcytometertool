@@ -1220,6 +1220,7 @@ class UnifiedApp:
             messagebox.showerror("Save Error", f"Failed to save file:\n{e}")
 
 
+
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
         self.url_entry = tk.Entry(self.tab_download, width=80)
@@ -1231,6 +1232,8 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Download cyz2json", command=self.install_all_requirements).pack(pady=5)
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
+        self.nn_clean_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning before pre-merge plot",variable=self.nn_clean_var).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
         tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
