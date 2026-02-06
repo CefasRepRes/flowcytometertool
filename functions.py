@@ -187,189 +187,23 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
 
 
 
-
-
+# issue in that even this generates a heavily modified df, jumbled up. I think the csv is not being written, or loading properly.
 def nn_homogenize_df(
     df,
     *,
     label_col="source_label",
-    feature_cols=("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
-    keep_unconsidered="keep",   # "keep" | "drop"
-    downsample_n=None,          # None = use all evaluable rows
+    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+    keep_unconsidered="keep",
+    scale_percentile=95.0,
+    downsample_n=None,
     random_state=42,
-    max_iters=20,
-    k_neighbors=3               # <-- X = 3 by default (ALL 3 neighbours must match)
+    max_iters=1,
+    in_hull_tol=1e-10,
+    tie_break="keep",
+    min_points_for_hull=4
 ):
-    """
-    Nearest-neighbour homogenization on linearly normalised axes (non-log space).
-
-    Normalisation (per axis, applied only for distance computation):
-      v_scaled = clip(v, 0, p95) / max(p95, tiny)
-    where p95 = 95th percentile of that axis. This maps typical values into [0,1]
-    and caps outliers at 1 so they don't dominate distances.
-
-    Elimination rule (synchronous per round):
-      A point is KEPT iff ALL of its k nearest neighbours (excluding itself)
-      have the same class label. Otherwise, it is removed. Repeat until stable.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input data (not modified in place).
-    label_col : str
-        Column name of the class labels.
-    feature_cols : sequence[str]
-        Numeric feature columns used for distance computation (dimension-agnostic).
-    keep_unconsidered : {"keep","drop"}
-        What to do with rows missing any of [feature_cols, label_col].
-    downsample_n : int | None
-        If set, randomly subsample evaluable rows before NN pruning (useful for speed).
-    random_state : int
-        RNG seed used for optional downsampling.
-    max_iters : int
-        Hard cap on the number of elimination rounds.
-    k_neighbors : int
-        Number of nearest neighbours that must ALL match the point's label.
-
-    Returns
-    -------
-    pd.DataFrame
-        Survivors (and, optionally, non-evaluable rows), preserving original columns/index.
-    """
-    import numpy as np
-    import pandas as pd
-
-    # ----- validation -----
-    if not isinstance(feature_cols, (list, tuple)) or len(feature_cols) < 1:
-        raise ValueError("feature_cols must be a non-empty list/tuple of column names.")
-
-    missing = [c for c in list(feature_cols) + [label_col] if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    # Partition evaluable vs not
-    need = list(feature_cols) + [label_col]
-    eval_mask = df[need].notna().all(axis=1)
-    df_eval = df.loc[eval_mask].copy()
-
-    if len(df_eval) == 0:
-        return df.copy() if keep_unconsidered == "keep" else df.iloc[0:0].copy()
-
-    # Optional downsampling
-    if downsample_n is not None and len(df_eval) > downsample_n:
-        df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
-
-    # ----- build normalised matrix in non-log space -----
-    # Per-axis: scale by 95th percentile (NO clipping)
-    X_raw = df_eval[list(feature_cols)].to_numpy(float, copy=True)
-    Xn = np.empty_like(X_raw)
-    tiny = 1e-12
-
-    for j, col in enumerate(feature_cols):
-        v = X_raw[:, j]
-        v = np.maximum(v, 0.0)     # cytometry is usually non-negative
-        p95 = np.percentile(v, 95.0)
-        scale = p95 if p95 > tiny else 1.0
-        Xn[:, j] = v / scale       # <-- NO CLIPPING: linear extrapolation allowed
-
-    y = df_eval[label_col].astype(str).to_numpy()
-    n = Xn.shape[0]
-
-    if n <= 1:
-        survivors_index = df_eval.index
-        if keep_unconsidered == "keep":
-            return pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
-        else:
-            return df.loc[survivors_index].copy()
-
-    # ----- k-NN helper -----
-    def knn_indices(points, k):
-        """
-        Return neighbour indices of shape (n, k) excluding self.
-        Prefers SciPy cKDTree, then sklearn, else a safe brute-force fallback.
-        """
-        try:
-            from scipy.spatial import cKDTree
-            tree = cKDTree(points)
-            k_eff = min(k + 1, len(points))  # include self, then drop it
-            _, idx = tree.query(points, k=k_eff, workers=-1)
-            idx = np.atleast_2d(idx)
-            if idx.shape[1] == 1:
-                return np.empty((len(points), 0), dtype=int)
-            return idx[:, 1:]
-        except Exception:
-            try:
-                from sklearn.neighbors import NearestNeighbors
-                k_eff = min(k + 1, len(points))
-                nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto", n_jobs=-1)
-                nn.fit(points)
-                _, idx = nn.kneighbors(points, n_neighbors=k_eff, return_distance=True)
-                if idx.shape[1] == 1:
-                    return np.empty((len(points), 0), dtype=int)
-                return idx[:, 1:]
-            except Exception:
-                # Brute force (modest sizes)
-                m = points.shape[0]
-                if m > 30000:
-                    raise RuntimeError(
-                        "No fast NN backend (scipy/sklearn) and dataset is large. "
-                        "Install scipy/sklearn or reduce data (downsample_n)."
-                    )
-                # squared distances
-                D2 = (
-                    (points**2).sum(axis=1, keepdims=True)
-                    + (points**2).sum(axis=1)[None, :]
-                    - 2.0 * points @ points.T
-                )
-                np.fill_diagonal(D2, np.inf)
-                k_eff = min(k, m - 1)
-                if k_eff <= 0:
-                    return np.empty((m, 0), dtype=int)
-                idx = np.argpartition(D2, kth=k_eff - 1, axis=1)[:, :k_eff]
-                # order within the k-slice by distance
-                rows = np.arange(m)[:, None]
-                order = np.argsort(D2[rows, idx], axis=1)
-                return idx[rows, order]
-
-    # ----- iterative elimination -----
-    keep_mask = np.ones(n, dtype=bool)
-    iters = 0
-
-    while iters < max_iters:
-        iters += 1
-        active = np.where(keep_mask)[0]
-        if len(active) <= 1:
-            break
-
-        Xa = Xn[active]
-        ya = y[active]
-
-        k_eff = min(k_neighbors, len(active) - 1)
-        if k_eff <= 0:
-            break
-
-        nbr_idx_local = knn_indices(Xa, k=k_eff)   # (len(active), k_eff)
-        if nbr_idx_local.size == 0:
-            break
-
-        nbr_labels = ya[nbr_idx_local]             # (len(active), k_eff)
-        same_all = (nbr_labels == ya[:, None]).all(axis=1)  # True if ALL k match
-
-        removed = (~same_all).sum()
-        if removed == 0:
-            break
-
-        keep_mask[active[~same_all]] = False
-
-    survivors_index = df_eval.index[keep_mask]
-
-    # ----- build output -----
-    if keep_unconsidered == "keep":
-        df_out = pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
-    else:
-        df_out = df.loc[survivors_index].copy()
-
-    return df_out
+    """NO-OP variant: returns the input DataFrame object unchanged."""
+    return df
 
 
 def sample_rows(df, sample_rate=0.001):
