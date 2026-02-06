@@ -185,6 +185,101 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
             messagebox.showerror("Combine Error", f"Failed to combine CSVs: {e}")
         return None
 
+# functions.py
+def nn_homogenize_df(
+    df,
+    *,
+    label_col="source_label",
+    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+    keep_unconsidered="keep",   # "keep" (default) | "drop"
+    downsample_n=None,          # None = all rows; or set an int for speed
+    random_state=42,
+    max_iters=100
+):
+    """
+    Iteratively remove any particle whose nearest neighbour is a different class,
+    eliminating both partners per round, until all remaining particles have a
+    same-class nearest neighbour. Returns a DataFrame to use in place of `df`.
+
+    - feature_cols: the three axes used for NN search (default matches your tool)
+    - keep_unconsidered: rows missing any of [x,y,z,label] are kept by default
+    """
+    import numpy as np
+    import pandas as pd
+
+    if len(feature_cols) != 3:
+        raise ValueError("feature_cols must be a 3-tuple (x, y, z).")
+    fx, fy, fz = feature_cols
+
+    needed = [fx, fy, fz, label_col]
+    missing = [c for c in needed if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Evaluable vs not
+    eval_mask = df[needed].notna().all(axis=1)
+    df_eval = df.loc[eval_mask].copy()
+    if len(df_eval) == 0:
+        return df.copy() if keep_unconsidered == "keep" else df.iloc[0:0].copy()
+
+    # Optional downsampling
+    if downsample_n is not None and len(df_eval) > downsample_n:
+        df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
+
+    X = df_eval[[fx, fy, fz]].to_numpy(float)
+    y = df_eval[label_col].astype(str).to_numpy()
+
+    def nearest_neighbour_indices(points):
+        try:
+            from scipy.spatial import cKDTree
+            tree = cKDTree(points)
+            _, idx = tree.query(points, k=2, workers=-1)
+            return idx[:, 1]
+        except Exception:
+            try:
+                from sklearn.neighbors import NearestNeighbors
+                nn = NearestNeighbors(n_neighbors=2, algorithm="auto", n_jobs=-1)
+                nn.fit(points)
+                _, idx = nn.kneighbors(points, n_neighbors=2, return_distance=True)
+                return idx[:, 1]
+            except Exception:
+                m = points.shape[0]
+                if m > 30000:
+                    raise RuntimeError(
+                        "No fast NN backend (scipy/sklearn) and dataset is large. "
+                        "Install scipy or set a smaller downsample_n."
+                    )
+                idx_nn = np.empty(m, dtype=int)
+                for i in range(m):
+                    d2 = ((points - points[i]) ** 2).sum(axis=1)
+                    d2[i] = np.inf
+                    idx_nn[i] = int(np.argmin(d2))
+                return idx_nn
+
+    keep = np.ones(len(df_eval), dtype=bool)
+    iters = 0
+    while iters < max_iters:
+        iters += 1
+        idx_active = np.where(keep)[0]
+        if len(idx_active) <= 1:
+            break
+        Xa = X[idx_active]
+        ya = y[idx_active]
+        nn = nearest_neighbour_indices(Xa)
+        conflict = ya != ya[nn]
+        if not np.any(conflict):
+            break
+        to_remove = conflict.copy()
+        to_remove[nn[conflict]] = True  # remove the NN partners too
+        keep[idx_active[to_remove]] = False
+
+    survivors_index = df_eval.iloc[np.where(keep)[0]].index
+    if keep_unconsidered == "keep":
+        # Keep non-evaluable rows alongside survivors; preserve original order
+        df_out = pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
+    else:
+        df_out = df.loc[survivors_index].copy()
+    return df_out
 
 def sample_rows(df, sample_rate=0.001):
     return df.sample(frac=sample_rate)
@@ -1047,6 +1142,7 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
         writer.writerow(["Image File", "confidence", "Suspected Species"])
         for image, data in metadata.items():
             writer.writerow([image, data["confidence"], data["species"]])
+
 
 
 

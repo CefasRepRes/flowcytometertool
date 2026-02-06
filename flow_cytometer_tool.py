@@ -1030,6 +1030,29 @@ class UnifiedApp:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
     def handle_combine_csvs(self):
+        # Version with NN cleaning in the 3 most important feature axes
+        def _nn_cleaned_premerge_plot_callback(raw_df):
+            out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+            try:
+                # 1) Clean with NN homogenization (processing-only)
+                from functions import nn_homogenize_df
+                cleaned_df = nn_homogenize_df(
+                    raw_df,
+                    label_col="source_label",
+                    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+                    keep_unconsidered="keep",   # or "drop" if you prefer strict survivors
+                    downsample_n=None           # set an int if you want faster previews
+                )
+                from functions import plot_3d_fluorescence_premerge
+                plot_3d_fluorescence_premerge(
+                    cleaned_df,
+                    label_col="source_label",
+                    out_html=out_html
+                )
+                functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+            except Exception as e:
+                functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
         def _premerge_plot_callback(raw_df):
             out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
             try:
@@ -1040,7 +1063,14 @@ class UnifiedApp:
             except Exception as e:
                 functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
 
-        self.df = functions.combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping, premerge_plot_fn=_premerge_plot_callback, delete_labels_fn=self.prompt_delete_labels)
+        self.df = functions.combine_csvs(
+            self.output_path,
+            expertise_matrix_path,
+            nogui=False,
+            prompt_merge_fn=self.prompt_class_grouping,
+            premerge_plot_fn= _nn_cleaned_premerge_plot_callback,  
+            delete_labels_fn=self.prompt_delete_labels
+        )
 
     def prompt_class_grouping(self,df):
         if df is None or 'source_label' not in df.columns:
@@ -1520,13 +1550,13 @@ class UnifiedApp:
                     ) for category in unique_categories
                 }
                 data['color'] = data['category'].map(color_map)
-                x_99 = np.percentile(data["Fl Yellow_total"], 99.5)
-                y_99 = np.percentile(data["Fl Red_total"], 99.5)
-                z_99 = np.percentile(data["Fl Orange_total"], 99.5)
+                x_99 = np.percentile(data["FWS_total"], 99.5)
+                y_99 = np.percentile(data["Fl_Red_total"], 99.5)
+                z_99 = np.percentile(data["Fl_Orange_total"], 99.5)
                 scatter = go.Scatter3d(
-                    x=data["Fl Yellow_total"],
-                    y=data["Fl Red_total"],
-                    z=data["Fl Orange_total"],
+                    x=data["FWS_total"],
+                    y=data["Fl_Red_total"],
+                    z=data["Fl_Orange_total"],
                     mode='markers',
                     marker=dict(size=5, color=data['color'], showscale=False),
                     text=data['category'],
@@ -1540,9 +1570,9 @@ class UnifiedApp:
                 fig = go.Figure(data=[scatter])
                 fig.update_layout(
                     scene=dict(
-                        xaxis=dict(range=[0, x_99], title="Fl Yellow_total"),
-                        yaxis=dict(range=[0, y_99], title="Fl Red_total"),
-                        zaxis=dict(range=[0, z_99], title="Fl Orange_total"),
+                        xaxis=dict(range=[0, x_99], title="FWS_total"),
+                        yaxis=dict(range=[0, y_99], title="Fl_Red_total"),
+                        zaxis=dict(range=[0, z_99], title="Fl_Orange_total"),
                         camera=camera
                     ),
                     title='3D Data Points'
