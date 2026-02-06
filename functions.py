@@ -185,258 +185,192 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
             messagebox.showerror("Combine Error", f"Failed to combine CSVs: {e}")
         return None
 
-# functions.py
+
+
+
+
 def nn_homogenize_df(
     df,
     *,
     label_col="source_label",
-    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
-    keep_unconsidered="keep",        # "keep" | "drop"
-    downsample_n=None,
+    feature_cols=("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
+    keep_unconsidered="keep",   # "keep" | "drop"
+    downsample_n=None,          # None = use all evaluable rows
     random_state=42,
-    max_iters=100,
-    # --- NEW: isolation guards ---
-    enforce_density=True,
-    k_neighbors=10,
-    min_same_neighbors=1,
-    prune_tiny_components=True,
-    min_component_size=3,
-    eps_factor=1.5,                  # ε = eps_factor * median(2nd-NN distance within class)
+    max_iters=20,
+    k_neighbors=3               # <-- X = 3 by default (ALL 3 neighbours must match)
 ):
     """
-    Iteratively remove particles whose nearest neighbour is a different class (both removed),
-    until stable. Then apply isolation guards to catch tiny odd cliques (pairs, triplets).
+    Nearest-neighbour homogenization on linearly normalised axes (non-log space).
 
-    Isolation guards (in robustly normalised space):
-      1) k-NN same-class density: require at least `min_same_neighbors` within k neighbors.
-      2) ε-graph tiny-component pruning: per class, drop components with size < min_component_size,
-         with ε chosen adaptively from the class' 2nd-NN distance median.
+    Normalisation (per axis, applied only for distance computation):
+      v_scaled = clip(v, 0, p95) / max(p95, tiny)
+    where p95 = 95th percentile of that axis. This maps typical values into [0,1]
+    and caps outliers at 1 so they don't dominate distances.
 
-    Returns a DataFrame preserving all original columns for surviving rows (and optionally
-    non-evaluable rows if keep_unconsidered="keep").
+    Elimination rule (synchronous per round):
+      A point is KEPT iff ALL of its k nearest neighbours (excluding itself)
+      have the same class label. Otherwise, it is removed. Repeat until stable.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input data (not modified in place).
+    label_col : str
+        Column name of the class labels.
+    feature_cols : sequence[str]
+        Numeric feature columns used for distance computation (dimension-agnostic).
+    keep_unconsidered : {"keep","drop"}
+        What to do with rows missing any of [feature_cols, label_col].
+    downsample_n : int | None
+        If set, randomly subsample evaluable rows before NN pruning (useful for speed).
+    random_state : int
+        RNG seed used for optional downsampling.
+    max_iters : int
+        Hard cap on the number of elimination rounds.
+    k_neighbors : int
+        Number of nearest neighbours that must ALL match the point's label.
+
+    Returns
+    -------
+    pd.DataFrame
+        Survivors (and, optionally, non-evaluable rows), preserving original columns/index.
     """
     import numpy as np
     import pandas as pd
 
-    # ---------- helpers ----------
-    def _normalise_for_nn(df_eval, feature_cols):
-        """Robust per-axis scaling: (x - median)/MAD; fallback to 95% IPR if MAD=0."""
-        X = df_eval[list(feature_cols)].to_numpy(float)
-        Xn = np.zeros_like(X)
-        for i, col in enumerate(feature_cols):
-            v = X[:, i]
-            med = np.median(v)
-            mad = np.median(np.abs(v - med))
-            if mad > 0:
-                Xn[:, i] = (v - med) / mad
-            else:
-                lo, hi = np.percentile(v, [2.5, 97.5])
-                rng = hi - lo if hi > lo else 1.0
-                Xn[:, i] = (v - med) / rng
-        return Xn
+    # ----- validation -----
+    if not isinstance(feature_cols, (list, tuple)) or len(feature_cols) < 1:
+        raise ValueError("feature_cols must be a non-empty list/tuple of column names.")
 
-    def _nn_indices(points):
-        """Nearest neighbour indices (excluding self), preferring cKDTree/sklearn."""
+    missing = [c for c in list(feature_cols) + [label_col] if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Partition evaluable vs not
+    need = list(feature_cols) + [label_col]
+    eval_mask = df[need].notna().all(axis=1)
+    df_eval = df.loc[eval_mask].copy()
+
+    if len(df_eval) == 0:
+        return df.copy() if keep_unconsidered == "keep" else df.iloc[0:0].copy()
+
+    # Optional downsampling
+    if downsample_n is not None and len(df_eval) > downsample_n:
+        df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
+
+    # ----- build normalised matrix in non-log space -----
+    # Per-axis: scale by 95th percentile (NO clipping)
+    X_raw = df_eval[list(feature_cols)].to_numpy(float, copy=True)
+    Xn = np.empty_like(X_raw)
+    tiny = 1e-12
+
+    for j, col in enumerate(feature_cols):
+        v = X_raw[:, j]
+        v = np.maximum(v, 0.0)     # cytometry is usually non-negative
+        p95 = np.percentile(v, 95.0)
+        scale = p95 if p95 > tiny else 1.0
+        Xn[:, j] = v / scale       # <-- NO CLIPPING: linear extrapolation allowed
+
+    y = df_eval[label_col].astype(str).to_numpy()
+    n = Xn.shape[0]
+
+    if n <= 1:
+        survivors_index = df_eval.index
+        if keep_unconsidered == "keep":
+            return pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
+        else:
+            return df.loc[survivors_index].copy()
+
+    # ----- k-NN helper -----
+    def knn_indices(points, k):
+        """
+        Return neighbour indices of shape (n, k) excluding self.
+        Prefers SciPy cKDTree, then sklearn, else a safe brute-force fallback.
+        """
         try:
             from scipy.spatial import cKDTree
             tree = cKDTree(points)
-            _, idx = tree.query(points, k=2, workers=-1)
-            return idx[:, 1]
-        except Exception:
-            try:
-                from sklearn.neighbors import NearestNeighbors
-                nn = NearestNeighbors(n_neighbors=2, algorithm="auto", n_jobs=-1)
-                nn.fit(points)
-                _, idx = nn.kneighbors(points, n_neighbors=2, return_distance=True)
-                return idx[:, 1]
-            except Exception:
-                m = points.shape[0]
-                if m > 30000:
-                    raise RuntimeError(
-                        "No fast NN backend (scipy/sklearn) and dataset is large. "
-                        "Install scipy or use downsample_n."
-                    )
-                idx_nn = np.empty(m, dtype=int)
-                for i in range(m):
-                    d2 = ((points - points[i]) ** 2).sum(axis=1)
-                    d2[i] = np.inf
-                    idx_nn[i] = int(np.argmin(d2))
-                return idx_nn
-
-    def _knn_indices(points, k):
-        """Return k-NN indices (excluding self) for density voting."""
-        try:
-            from scipy.spatial import cKDTree
-            tree = cKDTree(points)
-            d, idx = tree.query(points, k=min(k + 1, len(points)), workers=-1)
-            return idx[:, 1:], d[:, 1:]
+            k_eff = min(k + 1, len(points))  # include self, then drop it
+            _, idx = tree.query(points, k=k_eff, workers=-1)
+            idx = np.atleast_2d(idx)
+            if idx.shape[1] == 1:
+                return np.empty((len(points), 0), dtype=int)
+            return idx[:, 1:]
         except Exception:
             try:
                 from sklearn.neighbors import NearestNeighbors
                 k_eff = min(k + 1, len(points))
                 nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto", n_jobs=-1)
                 nn.fit(points)
-                d, idx = nn.kneighbors(points, n_neighbors=k_eff, return_distance=True)
-                return idx[:, 1:], d[:, 1:]
+                _, idx = nn.kneighbors(points, n_neighbors=k_eff, return_distance=True)
+                if idx.shape[1] == 1:
+                    return np.empty((len(points), 0), dtype=int)
+                return idx[:, 1:]
             except Exception:
-                # Brute-force fallback (small n)
+                # Brute force (modest sizes)
                 m = points.shape[0]
-                k_eff = min(k + 1, m)
-                D = np.zeros((m, m), dtype=float)
-                for i in range(m):
-                    D[i] = ((points - points[i]) ** 2).sum(axis=1)
-                    D[i, i] = np.inf
-                idx = np.argsort(D, axis=1)[:, :k_eff]
-                # distances:
+                if m > 30000:
+                    raise RuntimeError(
+                        "No fast NN backend (scipy/sklearn) and dataset is large. "
+                        "Install scipy/sklearn or reduce data (downsample_n)."
+                    )
+                # squared distances
+                D2 = (
+                    (points**2).sum(axis=1, keepdims=True)
+                    + (points**2).sum(axis=1)[None, :]
+                    - 2.0 * points @ points.T
+                )
+                np.fill_diagonal(D2, np.inf)
+                k_eff = min(k, m - 1)
+                if k_eff <= 0:
+                    return np.empty((m, 0), dtype=int)
+                idx = np.argpartition(D2, kth=k_eff - 1, axis=1)[:, :k_eff]
+                # order within the k-slice by distance
                 rows = np.arange(m)[:, None]
-                d = np.sqrt(D[rows, idx])
-                return idx[:, 1:], d[:, 1:]
+                order = np.argsort(D2[rows, idx], axis=1)
+                return idx[rows, order]
 
-    def _prune_components_classwise(Xn, labels, target_class, min_size, eps_factor):
-        """Return a boolean mask of points to KEEP within the specified class."""
-        import numpy as np
-        cls_mask = (labels == target_class)
-        idx_cls = np.where(cls_mask)[0]
-        if len(idx_cls) == 0:
-            return np.ones(len(labels), dtype=bool)
-        Xc = Xn[idx_cls]
-
-        # Skip if trivially small
-        if len(Xc) < min_size:
-            keep_local = np.zeros(len(Xc), dtype=bool)  # drop all tiny blobs
-            keep = np.ones(len(labels), dtype=bool)
-            keep[idx_cls] = keep_local
-            return keep
-
-        # Adaptive ε from class’ 2nd-NN median
-        knn_idx, knn_dist = _knn_indices(Xc, k=2)
-        d2 = knn_dist[:, 1] if knn_dist.shape[1] >= 2 else knn_dist[:, -1]
-        eps = float(np.median(d2)) * eps_factor
-        if not np.isfinite(eps) or eps <= 0:
-            # fallback: overall scale
-            eps = float(np.median(knn_dist)) if np.isfinite(np.median(knn_dist)) else 1.0
-
-        # Build graph via ε-neighbourhood
-        try:
-            from scipy.spatial import cKDTree
-            tree = cKDTree(Xc)
-            # all undirected edges under eps
-            pairs = list(tree.query_pairs(r=eps))
-        except Exception:
-            # fallback: brute-force edges
-            pairs = []
-            for i in range(len(Xc)):
-                for j in range(i + 1, len(Xc)):
-                    if np.linalg.norm(Xc[i] - Xc[j]) <= eps:
-                        pairs.append((i, j))
-
-        # Connected components
-        adj = [[] for _ in range(len(Xc))]
-        for i, j in pairs:
-            adj[i].append(j)
-            adj[j].append(i)
-
-        visited = np.zeros(len(Xc), dtype=bool)
-        keep_local = np.ones(len(Xc), dtype=bool)
-        for s in range(len(Xc)):
-            if visited[s]:
-                continue
-            # BFS
-            comp = []
-            stack = [s]
-            visited[s] = True
-            while stack:
-                u = stack.pop()
-                comp.append(u)
-                for v in adj[u]:
-                    if not visited[v]:
-                        visited[v] = True
-                        stack.append(v)
-            # If component size < min_size -> drop all nodes in this component
-            if len(comp) < min_size:
-                keep_local[comp] = False
-
-        keep = np.ones(len(labels), dtype=bool)
-        keep[idx_cls] = keep_local
-        return keep
-
-    # ---------- main ----------
-    if len(feature_cols) != 3:
-        raise ValueError("feature_cols must be a 3-tuple (x, y, z).")
-    fx, fy, fz = feature_cols
-
-    needed = [fx, fy, fz, label_col]
-    missing = [c for c in needed if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    eval_mask = df[needed].notna().all(axis=1)
-    df_eval = df.loc[eval_mask].copy()
-    if len(df_eval) == 0:
-        return df.copy() if keep_unconsidered == "keep" else df.iloc[0:0].copy()
-
-    # Optional downsampling (affects BOTH NN and guards)
-    if downsample_n is not None and len(df_eval) > downsample_n:
-        df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
-
-    # Robustly normalised coordinates (used only for neighbour logic)
-    Xn = _normalise_for_nn(df_eval, (fx, fy, fz))
-    y = df_eval[label_col].astype(str).to_numpy()
-
-    # --- Stage 1: Cross-class NN elimination (synchronous) ---
-    keep = np.ones(len(df_eval), dtype=bool)
+    # ----- iterative elimination -----
+    keep_mask = np.ones(n, dtype=bool)
     iters = 0
+
     while iters < max_iters:
         iters += 1
-        idx_active = np.where(keep)[0]
-        if len(idx_active) <= 1:
+        active = np.where(keep_mask)[0]
+        if len(active) <= 1:
             break
-        Xa = Xn[idx_active]
-        ya = y[idx_active]
-        nn = _nn_indices(Xa)
-        conflict = ya != ya[nn]
-        if not np.any(conflict):
+
+        Xa = Xn[active]
+        ya = y[active]
+
+        k_eff = min(k_neighbors, len(active) - 1)
+        if k_eff <= 0:
             break
-        to_remove = conflict.copy()
-        to_remove[nn[conflict]] = True
-        keep[idx_active[to_remove]] = False
 
-    survivors_local = np.where(keep)[0]
-    Xn_surv = Xn[survivors_local]
-    y_surv = y[survivors_local]
-    survivors_index = df_eval.iloc[survivors_local].index
+        nbr_idx_local = knn_indices(Xa, k=k_eff)   # (len(active), k_eff)
+        if nbr_idx_local.size == 0:
+            break
 
-    # --- Stage 2: Isolation guards ---
-    # 2.1 k-NN density: require at least `min_same_neighbors` same-class within k
-    if enforce_density and len(survivors_local) > 0 and min_same_neighbors > 0:
-        knn_idx, _ = _knn_indices(Xn_surv, k=k_neighbors)
-        same_counts = np.zeros(len(survivors_local), dtype=int)
-        for i in range(len(survivors_local)):
-            neigh = knn_idx[i]
-            same_counts[i] = int(np.sum(y_surv[neigh] == y_surv[i]))
-        keep_density = same_counts >= min_same_neighbors
-        survivors_index = survivors_index[keep_density]
-        Xn_surv = Xn_surv[keep_density]
-        y_surv = y_surv[keep_density]
+        nbr_labels = ya[nbr_idx_local]             # (len(active), k_eff)
+        same_all = (nbr_labels == ya[:, None]).all(axis=1)  # True if ALL k match
 
-    # 2.2 ε-graph tiny-component pruning (per class)
-    if prune_tiny_components and len(survivors_index) > 0 and min_component_size > 1:
-        keep_cc = np.ones(len(survivors_index), dtype=bool)
-        classes = np.unique(y_surv)
-        for cls in classes:
-            class_keep = _prune_components_classwise(
-                Xn_surv, y_surv, cls, min_component_size, eps_factor
-            )
-            keep_cc &= class_keep
-        survivors_index = survivors_index[keep_cc]
+        removed = (~same_all).sum()
+        if removed == 0:
+            break
 
-    # --- Build output df ---
+        keep_mask[active[~same_all]] = False
+
+    survivors_index = df_eval.index[keep_mask]
+
+    # ----- build output -----
     if keep_unconsidered == "keep":
         df_out = pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
     else:
         df_out = df.loc[survivors_index].copy()
+
     return df_out
-    
+
 
 def sample_rows(df, sample_rate=0.001):
     return df.sample(frac=sample_rate)

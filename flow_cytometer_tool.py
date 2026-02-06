@@ -1292,7 +1292,7 @@ class UnifiedApp:
         self.nn_clean_var = tk.BooleanVar(value=False)
         tk.Checkbutton(self.tab_download,text="Apply NN-cleaning pre-merge",variable=self.nn_clean_var).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
-        tk.Button(    self.tab_download,    text="Run NN Cleaning",    command=self.handle_nn_cleaning).pack(pady=5)
+        tk.Button(    self.tab_download,    text="Run NN cleaning post-merge",    command=self.handle_nn_cleaning).pack(pady=5)
         tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
         self.max_per_class_entry.insert(0, "100000")
