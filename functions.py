@@ -165,7 +165,7 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
         #print('Cleaned group names to something consistent')
         #print("Cleaned source labels:", list(set(combined_df['source_label'])))
         print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
-        combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
+        combined_df = combined_df.drop(columns=['person','id'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -657,11 +657,11 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
 
     # Compute consensus label per particls
-    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
-    combined_df['source_label'] = combined_df['consensus_label']
-    print(combined_df)
-    combined_df = combined_df.reset_index()
-    print(combined_df)
+    #combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    #combined_df['source_label'] = combined_df['consensus_label']
+    #print(combined_df)
+    #combined_df = combined_df.reset_index()
+    #print(combined_df)
     return combined_df
 
 
