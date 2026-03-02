@@ -37,6 +37,7 @@ from tkinter import filedialog
 import tempfile
 import sys
 import time
+import webbrowser
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -135,7 +136,7 @@ def test_classifier(df, model_path, nogui=False):
             messagebox.showerror("Test Error", f"Failed to test classifier: {e}")
         return df, None
 
-def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None):
+def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_fn = None, premerge_plot_fn = None, delete_labels_fn=None):
     if nogui:
         zonechoices = "FAKEBALTIC"#PELTIC  # Not ideal - hard coded so if the underlying dataset changes, the github actions workflow will break
     else:
@@ -152,7 +153,11 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
 
         print("Zone choices:", zonechoices)
         print("expertise_levels:", expertise_levels)
-        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn)
+        combined_df = build_consensual_dataset(output_path, expertise_levels, zonechoices, prompt_merge_fn, premerge_plot_fn, delete_labels_fn)
+        #print("set(list(combined_df['source_label']))")
+        #print(set(list(combined_df['source_label'])))
+        #print("set(list(combined_df['consensus_label']))")
+        #print(set(list(combined_df['consensus_label'])))
         #combined_df['source_label'] = [
         #    re.sub(r'[^a-zA-Z]', '', item).lower() for item in combined_df['source_label']
         #]
@@ -160,7 +165,7 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
         #print('Cleaned group names to something consistent')
         #print("Cleaned source labels:", list(set(combined_df['source_label'])))
         print("Now dropping columns: ['consensus_label','person','index','id','sample_weight']")
-        combined_df = combined_df.drop(columns=['consensus_label','person','index','id','sample_weight'])
+        combined_df = combined_df.drop(columns=['person','id'])
         if combined_df is not None and not combined_df.empty:
             if nogui:
                 print("CSV files combined successfully.")
@@ -179,6 +184,260 @@ def combine_csvs(output_path, expertise_matrix_path, nogui=False, prompt_merge_f
         else:
             messagebox.showerror("Combine Error", f"Failed to combine CSVs: {e}")
         return None
+
+
+def nn_homogenize_df(
+    df,
+    *,
+    label_col="source_label",
+    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+    keep_unconsidered="keep",        # "keep" | "drop"
+    downsample_n=None,
+    random_state=42,
+    max_iters=100,
+    # --- NEW: isolation guards ---
+    enforce_density=True,
+    k_neighbors=10,
+    min_same_neighbors=1,
+    prune_tiny_components=True,
+    min_component_size=3,
+    eps_factor=1.5,                  # ε = eps_factor * median(2nd-NN distance within class)
+):
+    """
+    Iteratively remove particles whose nearest neighbour is a different class (both removed),
+    until stable. Then apply isolation guards to catch tiny odd cliques (pairs, triplets).
+
+    Isolation guards (in robustly normalised space):
+      1) k-NN same-class density: require at least `min_same_neighbors` within k neighbors.
+      2) ε-graph tiny-component pruning: per class, drop components with size < min_component_size,
+         with ε chosen adaptively from the class' 2nd-NN distance median.
+
+    Returns a DataFrame preserving all original columns for surviving rows (and optionally
+    non-evaluable rows if keep_unconsidered="keep").
+    """
+    import numpy as np
+    import pandas as pd
+
+    # ---------- helpers ----------
+    def _normalise_for_nn(df_eval, feature_cols):
+        """Robust per-axis scaling: (x - median)/MAD; fallback to 95% IPR if MAD=0."""
+        X = df_eval[list(feature_cols)].to_numpy(float)
+        Xn = np.zeros_like(X)
+        for i, col in enumerate(feature_cols):
+            v = X[:, i]
+            med = np.median(v)
+            mad = np.median(np.abs(v - med))
+            if mad > 0:
+                Xn[:, i] = (v - med) / mad
+            else:
+                lo, hi = np.percentile(v, [2.5, 97.5])
+                rng = hi - lo if hi > lo else 1.0
+                Xn[:, i] = (v - med) / rng
+        return Xn
+
+    def _nn_indices(points):
+        """Nearest neighbour indices (excluding self), preferring cKDTree/sklearn."""
+        try:
+            from scipy.spatial import cKDTree
+            tree = cKDTree(points)
+            _, idx = tree.query(points, k=2, workers=-1)
+            return idx[:, 1]
+        except Exception:
+            try:
+                from sklearn.neighbors import NearestNeighbors
+                nn = NearestNeighbors(n_neighbors=2, algorithm="auto", n_jobs=-1)
+                nn.fit(points)
+                _, idx = nn.kneighbors(points, n_neighbors=2, return_distance=True)
+                return idx[:, 1]
+            except Exception:
+                m = points.shape[0]
+                if m > 30000:
+                    raise RuntimeError(
+                        "No fast NN backend (scipy/sklearn) and dataset is large. "
+                        "Install scipy or use downsample_n."
+                    )
+                idx_nn = np.empty(m, dtype=int)
+                for i in range(m):
+                    d2 = ((points - points[i]) ** 2).sum(axis=1)
+                    d2[i] = np.inf
+                    idx_nn[i] = int(np.argmin(d2))
+                return idx_nn
+
+    def _knn_indices(points, k):
+        """Return k-NN indices (excluding self) for density voting."""
+        try:
+            from scipy.spatial import cKDTree
+            tree = cKDTree(points)
+            d, idx = tree.query(points, k=min(k + 1, len(points)), workers=-1)
+            return idx[:, 1:], d[:, 1:]
+        except Exception:
+            try:
+                from sklearn.neighbors import NearestNeighbors
+                k_eff = min(k + 1, len(points))
+                nn = NearestNeighbors(n_neighbors=k_eff, algorithm="auto", n_jobs=-1)
+                nn.fit(points)
+                d, idx = nn.kneighbors(points, n_neighbors=k_eff, return_distance=True)
+                return idx[:, 1:], d[:, 1:]
+            except Exception:
+                # Brute-force fallback (small n)
+                m = points.shape[0]
+                k_eff = min(k + 1, m)
+                D = np.zeros((m, m), dtype=float)
+                for i in range(m):
+                    D[i] = ((points - points[i]) ** 2).sum(axis=1)
+                    D[i, i] = np.inf
+                idx = np.argsort(D, axis=1)[:, :k_eff]
+                # distances:
+                rows = np.arange(m)[:, None]
+                d = np.sqrt(D[rows, idx])
+                return idx[:, 1:], d[:, 1:]
+
+    def _prune_components_classwise(Xn, labels, target_class, min_size, eps_factor):
+        """Return a boolean mask of points to KEEP within the specified class."""
+        import numpy as np
+        cls_mask = (labels == target_class)
+        idx_cls = np.where(cls_mask)[0]
+        if len(idx_cls) == 0:
+            return np.ones(len(labels), dtype=bool)
+        Xc = Xn[idx_cls]
+
+        # Skip if trivially small
+        if len(Xc) < min_size:
+            keep_local = np.zeros(len(Xc), dtype=bool)  # drop all tiny blobs
+            keep = np.ones(len(labels), dtype=bool)
+            keep[idx_cls] = keep_local
+            return keep
+
+        # Adaptive ε from class’ 2nd-NN median
+        knn_idx, knn_dist = _knn_indices(Xc, k=2)
+        d2 = knn_dist[:, 1] if knn_dist.shape[1] >= 2 else knn_dist[:, -1]
+        eps = float(np.median(d2)) * eps_factor
+        if not np.isfinite(eps) or eps <= 0:
+            # fallback: overall scale
+            eps = float(np.median(knn_dist)) if np.isfinite(np.median(knn_dist)) else 1.0
+
+        # Build graph via ε-neighbourhood
+        try:
+            from scipy.spatial import cKDTree
+            tree = cKDTree(Xc)
+            # all undirected edges under eps
+            pairs = list(tree.query_pairs(r=eps))
+        except Exception:
+            # fallback: brute-force edges
+            pairs = []
+            for i in range(len(Xc)):
+                for j in range(i + 1, len(Xc)):
+                    if np.linalg.norm(Xc[i] - Xc[j]) <= eps:
+                        pairs.append((i, j))
+
+        # Connected components
+        adj = [[] for _ in range(len(Xc))]
+        for i, j in pairs:
+            adj[i].append(j)
+            adj[j].append(i)
+
+        visited = np.zeros(len(Xc), dtype=bool)
+        keep_local = np.ones(len(Xc), dtype=bool)
+        for s in range(len(Xc)):
+            if visited[s]:
+                continue
+            # BFS
+            comp = []
+            stack = [s]
+            visited[s] = True
+            while stack:
+                u = stack.pop()
+                comp.append(u)
+                for v in adj[u]:
+                    if not visited[v]:
+                        visited[v] = True
+                        stack.append(v)
+            # If component size < min_size -> drop all nodes in this component
+            if len(comp) < min_size:
+                keep_local[comp] = False
+
+        keep = np.ones(len(labels), dtype=bool)
+        keep[idx_cls] = keep_local
+        return keep
+
+    # ---------- main ----------
+    if len(feature_cols) != 3:
+        raise ValueError("feature_cols must be a 3-tuple (x, y, z).")
+    fx, fy, fz = feature_cols
+
+    needed = [fx, fy, fz, label_col]
+    missing = [c for c in needed if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    eval_mask = df[needed].notna().all(axis=1)
+    df_eval = df.loc[eval_mask].copy()
+    if len(df_eval) == 0:
+        return df.copy() if keep_unconsidered == "keep" else df.iloc[0:0].copy()
+
+    # Optional downsampling (affects BOTH NN and guards)
+    if downsample_n is not None and len(df_eval) > downsample_n:
+        df_eval = df_eval.sample(n=downsample_n, random_state=random_state)
+
+    # Robustly normalised coordinates (used only for neighbour logic)
+    Xn = _normalise_for_nn(df_eval, (fx, fy, fz))
+    y = df_eval[label_col].astype(str).to_numpy()
+
+    # --- Stage 1: Cross-class NN elimination (synchronous) ---
+    keep = np.ones(len(df_eval), dtype=bool)
+    iters = 0
+    while iters < max_iters:
+        iters += 1
+        idx_active = np.where(keep)[0]
+        if len(idx_active) <= 1:
+            break
+        Xa = Xn[idx_active]
+        ya = y[idx_active]
+        nn = _nn_indices(Xa)
+        conflict = ya != ya[nn]
+        if not np.any(conflict):
+            break
+        to_remove = conflict.copy()
+        to_remove[nn[conflict]] = True
+        keep[idx_active[to_remove]] = False
+
+    survivors_local = np.where(keep)[0]
+    Xn_surv = Xn[survivors_local]
+    y_surv = y[survivors_local]
+    survivors_index = df_eval.iloc[survivors_local].index
+
+    # --- Stage 2: Isolation guards ---
+    # 2.1 k-NN density: require at least `min_same_neighbors` same-class within k
+    if enforce_density and len(survivors_local) > 0 and min_same_neighbors > 0:
+        knn_idx, _ = _knn_indices(Xn_surv, k=k_neighbors)
+        same_counts = np.zeros(len(survivors_local), dtype=int)
+        for i in range(len(survivors_local)):
+            neigh = knn_idx[i]
+            same_counts[i] = int(np.sum(y_surv[neigh] == y_surv[i]))
+        keep_density = same_counts >= min_same_neighbors
+        survivors_index = survivors_index[keep_density]
+        Xn_surv = Xn_surv[keep_density]
+        y_surv = y_surv[keep_density]
+
+    # 2.2 ε-graph tiny-component pruning (per class)
+    if prune_tiny_components and len(survivors_index) > 0 and min_component_size > 1:
+        keep_cc = np.ones(len(survivors_index), dtype=bool)
+        classes = np.unique(y_surv)
+        for cls in classes:
+            class_keep = _prune_components_classwise(
+                Xn_surv, y_surv, cls, min_component_size, eps_factor
+            )
+            keep_cc &= class_keep
+        survivors_index = survivors_index[keep_cc]
+
+    # --- Build output df ---
+    if keep_unconsidered == "keep":
+        df_out = pd.concat([df.loc[~eval_mask], df.loc[survivors_index]], axis=0).sort_index(kind="mergesort")
+    else:
+        df_out = df.loc[survivors_index].copy()
+    return df_out
+    
+
 
 
 def sample_rows(df, sample_rate=0.001):
@@ -555,7 +814,7 @@ def compute_consensual_labels_and_sample_weights(data):
 
 
 
-def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None):
+def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None, premerge_plot_fn=None, delete_labels_fn=None):
     """
     Build a consensual dataset from flow cytometry CSV files.
     
@@ -595,6 +854,25 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     
     combined_df = pd.concat(all_data, ignore_index=True)
     
+    try:
+        if premerge_plot_fn is not None:
+            premerge_plot_fn(combined_df)
+        else:
+            # default behavior if no callback was provided:
+            # save next to the working directory as a one-off
+            default_out = os.path.join(os.path.expanduser("~"), "Documents",
+                                       "flowcytometertool", "Training plots",
+                                       "premerge_3d_fluorescence.html")
+            os.makedirs(os.path.dirname(default_out), exist_ok=True)
+            plot_3d_fluorescence_premerge(
+                combined_df, label_col="source_label", out_html=default_out
+            )
+    except Exception as e:
+        print(f"[warn] pre-merge 3D plot not created: {e}")
+
+    if delete_labels_fn is not None:
+        delete_labels_fn(combined_df)
+
     if prompt_merge_fn is not None:
         prompt_merge_fn(combined_df)
     
@@ -613,11 +891,11 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
 
     # Compute consensus label per particls
-    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
-    combined_df['source_label'] = combined_df['consensus_label']
-    print(combined_df)
-    combined_df = combined_df.reset_index()
-    print(combined_df)
+    #combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    #combined_df['source_label'] = combined_df['consensus_label']
+    #print(combined_df)
+    #combined_df = combined_df.reset_index()
+    #print(combined_df)
     return combined_df
 
 
@@ -735,13 +1013,17 @@ def plot_all_hyperpars_combi_and_classifiers_scores(cv_results, plots_dir):
 def train_classifier(df, plots_dir, model_path, max_per_class, calibration_enabled = False):
     df = stratified_subsample(df, target_column="source_label", max_per_class=max_per_class)
     df["group"] = df.index # This means no grouping. i.e. it does not matter which file the particle label came from.
-    cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]]
+    cleaned_df = df[[col for col in df.columns if col not in ["datetime", "user_id", "location"]]] #cleaned_df = df[["source_label","group","weight","Fl_Yellow_total",  "Fl_Red_total",  "Fl_Orange_total"]]
+    print('cleaned_df.columns')
+    print(cleaned_df.columns)
     # Detect if running from PyInstaller bundle
     is_frozen = getattr(sys, 'frozen', False)
     # Detect if running on Linux
     is_linux = platform.system().lower() == "linux"
     # Set cores to 1 if on Linux (to avoid joblib memory leak from actions workflow) or frozen executable which similarly does not seem to work parallelised
     cores = 1 if is_frozen or is_linux else os.cpu_count()
+    print('cores:')
+    print(cores)
 
     
     # Split the data
@@ -1021,6 +1303,315 @@ def save_metadata(current_image_index, tif_files, metadata, confidence_entry, sp
             writer.writerow([image, data["confidence"], data["species"]])
 
 
+
+
+
+def plot_3d_fluorescence_premerge(df, label_col, out_html):
+    """
+    Create a 3D fluorescence scatter of the raw (pre-merge) training data.
+    Colors and shapes by `label_col` to inform merging decisions.
+    Adds legend entries per class for quick filtering.
+    """
+    import os
+    import numpy as np
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import webbrowser
+
+    # Accept either spaced, underscored, or dotted column names
+    candidate_names = [
+        ("FWS_total", "Fl Red_total", "Fl Orange_total"),
+        ("FWS_total", "Fl_Red_total", "Fl_Orange_total"),
+        ("FWS_total", "Fl Red_total", "Fl.Orange_total"),
+        ("FWS_total", "Fl.Red_total", "Fl.Orange_total"),
+    ]
+    triplet = None
+    for cand in candidate_names:
+        if all(c in df.columns for c in cand):
+            triplet = cand
+            break
+    if triplet is None:
+        raise ValueError(
+            "Could not find fluorescence columns. "
+            "Looked for variants of Yellow/Red/Orange *_total."
+        )
+    fx, fy, fz = triplet
+
+    # Keep required columns; drop rows with missing values
+    work = df[[fx, fy, fz, label_col]].dropna().copy()
+
+    # Downsample for responsiveness (tweak if needed)
+    max_points = 120_000
+    if len(work) > max_points:
+        work = work.sample(n=max_points, random_state=42)
+
+    # Axis clipping at 99.5th percentile (like your overlap tool)
+    x99 = np.percentile(work[fx], 99.5)
+    y99 = np.percentile(work[fy], 99.5)
+    z99 = np.percentile(work[fz], 99.5)
+
+    # Deterministic color palette (simple HUSL-like wheel)
+    classes = sorted(work[label_col].astype(str).unique())
+    def husl_palette(n):
+        return [f"hsl({int(360*i/n)}, 65%, 50%)" for i in range(n)]
+    palette = husl_palette(len(classes))
+    color_map = dict(zip(classes, palette))
+    work["_color"] = work[label_col].astype(str).map(color_map)
+
+    # 🔷 Symbol cycling (broad set; friendly to 3D scatter)
+    base_symbols = ['circle', 'circle-open', 'cross', 'diamond',
+            'diamond-open', 'square', 'square-open', 'x']
+            
+    # Repeat/cycle to cover all classes
+    sym_list = (base_symbols * ((len(classes) // len(base_symbols)) + 1))[:len(classes)]
+    symbol_map = dict(zip(classes, sym_list))
+    work["_symbol"] = work[label_col].astype(str).map(symbol_map)
+
+    # One big data trace (fast) with per-point colors & symbols
+    scatter = go.Scatter3d(
+        x=work[fx],
+        y=work[fy],
+        z=work[fz],
+        mode="markers",
+        marker=dict(
+            size=3,
+            color=work["_color"],
+            symbol=work["_symbol"],
+            opacity=0.65,
+            line=dict(width=0.3, color="rgba(20,20,20,0.4)")
+        ),
+        text=work[label_col].astype(str),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            f"{fx}: %{{x:.2f}}<br>"
+            f"{fy}: %{{y:.2f}}<br>"
+            f"{fz}: %{{z:.2f}}<br>"
+            "<extra></extra>"
+        ),
+        name="Raw training points",
+        showlegend=False  # legend handled by tiny class traces below
+    )
+
+    # Legend entries: one tiny invisible-in-scene trace per class
+    legend_traces = []
+    for cls in classes:
+        legend_traces.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None],
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=color_map[cls],
+                    symbol=symbol_map[cls],
+                    line=dict(width=1, color="rgba(20,20,20,0.6)")
+                ),
+                name=str(cls),
+                showlegend=True
+            )
+        )
+
+    fig = go.Figure(data=[scatter] + legend_traces)
+    fig.update_layout(
+        title=f"3D Fluorescence (pre-merge) — colored by {label_col}",
+        height=800,
+        scene=dict(
+            xaxis=dict(range=[0, x99], title=fx),
+            yaxis=dict(range=[0, y99], title=fy),
+            zaxis=dict(range=[0, z99], title=fz),
+            camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.5))
+        ),
+        legend=dict(
+            title="Classes",
+            itemsizing="trace",
+            x=0.02, y=0.98,
+            bgcolor="rgba(255,255,255,0.6)"
+        ),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+
+    # Save + auto-open
+    pio.write_html(fig, file=out_html, auto_open=False)
+    webbrowser.open("file://" + os.path.abspath(out_html))
+    return out_html
+
+
+def FWS_size_plot_3d_fluorescence_premerge(
+    df,
+    label_col,
+    out_html,
+    *,
+    size_log=True,          # log-scale SWS sizes for better spread
+    size_min=2,             # minimum marker size (px)
+    size_max=10,            # maximum marker size (px)
+    size_clip_pct=99.0      # clip SWS at this percentile before scaling
+):
+    """
+    Create a 3D fluorescence scatter of the raw (pre-merge) training data.
+    Colors and shapes by `label_col` to inform merging decisions.
+    Marker size is driven by a fourth variable: total SWS.
+    Adds legend entries per class for quick filtering.
+    """
+    import os
+    import numpy as np
+    import plotly.graph_objects as go
+    import plotly.io as pio
+    import webbrowser
+
+    # --- Accept either spaced, underscored, or dotted column names for fluorescence ---
+    fl_candidate_triplets = [
+        ("Fl Yellow_total", "Fl Red_total", "Fl Orange_total"),
+        ("Fl_Yellow_total", "Fl_Red_total", "Fl_Orange_total"),
+        ("Fl Yellow_total", "Fl Red_total", "Fl.Orange_total"),
+        ("Fl.Yellow_total", "Fl.Red_total", "Fl.Orange_total"),
+    ]
+    triplet = None
+    for cand in fl_candidate_triplets:
+        if all(c in df.columns for c in cand):
+            triplet = cand
+            break
+    if triplet is None:
+        raise ValueError(
+            "Could not find fluorescence columns. "
+            "Looked for variants of Yellow/Red/Orange *_total."
+        )
+    fx, fy, fz = triplet
+
+    # --- Fourth variable (SWS) for marker size: try common variants ---
+    sws_candidates = [ "FWS_total"    ]
+    size_col = None
+    for c in sws_candidates:
+        if c in df.columns:
+            size_col = c
+            break
+    if size_col is None:
+        raise ValueError(
+            "Could not find SWS/side-scatter column. "
+            "Tried: " + ", ".join(sws_candidates)
+        )
+
+    # --- Keep required columns; drop rows with missing values ---
+    work = df[[fx, fy, fz, size_col, label_col]].dropna().copy()
+
+    # --- Downsample for responsiveness (tweak if needed) ---
+    max_points = 120_000
+    if len(work) > max_points:
+        work = work.sample(n=max_points, random_state=42)
+
+    # --- Axis clipping at 99.5th percentile (like your overlap tool) ---
+    x99 = np.percentile(work[fx], 99.5)
+    y99 = np.percentile(work[fy], 99.5)
+    z99 = np.percentile(work[fz], 99.5)
+
+    # --- Compute marker sizes from SWS ---
+    sws_vals = work[size_col].astype(float).to_numpy()
+    upper = np.percentile(sws_vals, size_clip_pct)  # robust upper-clip
+    sws_clipped = np.minimum(sws_vals, upper)
+
+    if size_log:
+        sws_trans = np.log10(1.0 + np.maximum(sws_clipped, 0.0))
+    else:
+        sws_trans = np.maximum(sws_clipped, 0.0)
+
+    vmin = float(np.min(sws_trans))
+    vmax = float(np.max(sws_trans))
+    if vmax > vmin:
+        sizes = size_min + (sws_trans - vmin) * (size_max - size_min) / (vmax - vmin)
+    else:
+        sizes = np.full_like(sws_trans, (size_min + size_max) / 2.0)
+
+    # --- Deterministic color palette (simple HUSL-like wheel) ---
+    classes = sorted(work[label_col].astype(str).unique())
+
+    def husl_palette(n):
+        return [f"hsl({int(360*i/n)}, 65%, 50%)" for i in range(n)]
+
+    palette = husl_palette(len(classes))
+    color_map = dict(zip(classes, palette))
+    work["_color"] = work[label_col].astype(str).map(color_map)
+
+    # --- Symbol cycling ---
+    base_symbols = [
+        "circle", "circle-open", "cross", "diamond",
+        "diamond-open", "square", "square-open", "x"
+    ]
+    sym_list = (base_symbols * ((len(classes) // len(base_symbols)) + 1))[:len(classes)]
+    symbol_map = dict(zip(classes, sym_list))
+    work["_symbol"] = work[label_col].astype(str).map(symbol_map)
+
+    # --- Main data trace ---
+    scatter = go.Scatter3d(
+        x=work[fx],
+        y=work[fy],
+        z=work[fz],
+        mode="markers",
+        marker=dict(
+            size=sizes,                  # <- size from SWS
+            color=work["_color"],
+            symbol=work["_symbol"],
+            opacity=0.65,
+            line=dict(width=0.3, color="rgba(20,20,20,0.4)")
+        ),
+        text=work[label_col].astype(str),
+        # IMPORTANT: escape Plotly placeholders in f-strings using DOUBLE BRACES
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            f"{fx}: %{{x:.2f}}<br>"
+            f"{fy}: %{{y:.2f}}<br>"
+            f"{fz}: %{{z:.2f}}<br>"
+            f"{size_col} (scaled): %{{marker.size:.2f}} px<br>"
+            "<extra></extra>"
+        ),
+        name="Raw training points",
+        showlegend=False
+    )
+
+    # --- Legend entries: class-only traces ---
+    legend_traces = []
+    for cls in classes:
+        legend_traces.append(
+            go.Scatter3d(
+                x=[None], y=[None], z=[None],
+                mode="markers",
+                marker=dict(
+                    size=6,
+                    color=color_map[cls],
+                    symbol=symbol_map[cls],
+                    line=dict(width=1, color="rgba(20,20,20,0.6)")
+                ),
+                name=str(cls),
+                showlegend=True
+            )
+        )
+
+    title_suffix = (
+        f" — colored by {label_col}, size by {size_col}"
+        + (" (log scaled)" if size_log else "")
+    )
+
+    fig = go.Figure(data=[scatter] + legend_traces)
+    fig.update_layout(
+        title=f"3D Fluorescence (pre-merge){title_suffix}",
+        height=800,
+        scene=dict(
+            xaxis=dict(range=[0, x99], title=fx),
+            yaxis=dict(range=[0, y99], title=fy),
+            zaxis=dict(range=[0, z99], title=fz),
+            camera=dict(eye=dict(x=-1.5, y=-1.5, z=1.5))
+        ),
+        legend=dict(
+            title="Classes",
+            itemsizing="trace",
+            x=0.02, y=0.98,
+            bgcolor="rgba(255,255,255,0.6)"
+        ),
+        margin=dict(l=0, r=0, t=60, b=0)
+    )
+
+    pio.write_html(fig, file=out_html, auto_open=False)
+    webbrowser.open("file://" + os.path.abspath(out_html))
+    return out_html
+
+
 def plot3d(predictions_file):
     data = pd.read_csv(predictions_file)
     data['category'] = data['predicted_label']
@@ -1128,7 +1719,7 @@ def run_backend_only():
 
         # 5. Combine CSVs
         print("📊 Combining CSV files...")
-        df = combine_csvs(output_path, expertise_matrix_path, nogui=True)
+        df = combine_csvs(output_path, expertise_matrix_path, nogui=True, premerge_plot_fn= False)
         if df is None:
             print("⚠️ No CSV files found.")
             return

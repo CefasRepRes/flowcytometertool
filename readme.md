@@ -1,3 +1,8 @@
+
+> ⚠️ **THIS REPOSITORY IS CURRENTLY BROKEN — DO NOT USE**
+> A major bug has been discovered and it has not yet been fixed properly. See Issue #43 for details.
+
+
 ## Context
 
 The imaging flow Cytometer (IFC) aboard Cefas Endeavour operates continuously, capturing high-resolution data for any small particles in the water. These may be harmful algae, microbes, sewage related flocs, natural or synthetic fibres etc. The instrument can also inject staining dyes to bind RNA, DNA, and other cellular components, enabling detailed insights into cellular processes. Unlike other imaging instruments such as the Plankton Imager, which targets larger trophic levels relevant to fisheries, IFC focuses on smaller organisms, offering unique opportunities for water quality and ecosystem monitoring.
