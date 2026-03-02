@@ -263,6 +263,73 @@ class UnifiedApp:
         self.json_file = os.path.join(self.tool_dir, "tempfile.json")
         self.listmode_file = os.path.join(self.tool_dir, "tempfile.csv")
 
+    def handle_nn_cleaning(self):
+        if self.df is None:
+            messagebox.showerror("Error", "No dataset loaded. Combine CSVs first.")
+            return
+        try:
+            from functions import nn_homogenize_df, plot_3d_fluorescence_premerge
+
+            out_html = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
+            plot_3d_fluorescence_premerge(
+                self.df,
+                label_col="source_label",
+                out_html=out_html
+            )
+            # Clean the df
+            cleaned_df = nn_homogenize_df(
+                self.df,
+                label_col="source_label",
+                feature_cols=("FWS_total", "Fl_Red_total", "Fl_Orange_total"),
+                keep_unconsidered="keep",
+                downsample_n=None
+            )
+            # Plot cleaned result
+            self.df = cleaned_df
+            out_html2 = os.path.join(self.plots_dir, "post_nn_cleaning_3d2.html")
+            plot_3d_fluorescence_premerge(
+                self.df,
+                label_col="source_label",
+                out_html=out_html2
+            )            
+            functions.log_message(f"NN-cleaned 3D plot written: {out_html}")
+            # Update stored df (optional)
+            messagebox.showinfo("NN Cleaning Complete", f"Done! Cleaned df has {len(cleaned_df)} rows.")
+            # Refresh visualisation controls
+            self.refresh_comboboxes()
+        except Exception as e:
+            messagebox.showerror("NN Cleaning Error", f"Failed during NN cleaning: {e}")
+
+    def prompt_delete_labels(self, df):
+        import tkinter as tk
+        from tkinter import messagebox
+
+        labels = sorted(df['source_label'].dropna().unique())
+        if not labels:
+            return
+
+        top = tk.Toplevel(self.root)
+        top.title("Delete Label Groups")
+
+        listbox = tk.Listbox(top, selectmode=tk.MULTIPLE, width=50, height=30)
+        for label in labels:
+            listbox.insert(tk.END, label)
+        listbox.pack(padx=10, pady=10)
+
+        def do_delete():
+            indexes = listbox.curselection()
+            if not indexes:
+                top.destroy()
+                return
+            selected = [labels[i] for i in indexes]
+            df.drop(df[df['source_label'].isin(selected)].index, inplace=True)
+            messagebox.showinfo("Deleted", f"Removed: {selected}")
+            top.destroy()
+
+        tk.Button(top, text="Delete selected", command=do_delete).pack(pady=10)
+        top.grab_set()
+        self.root.wait_window(top)        
+
     def process_calibration_file(self):
         try:
             cyz_path = self.calibration_file_entry.get().strip()
@@ -990,7 +1057,7 @@ class UnifiedApp:
     def generate_mixfile(self):
         try:
             container = self.url_entry_blob.get().strip()
-            print(container)
+            #print(container)
             sas_token_path = self.sas_token_entry.get().strip()
             sample_rate = float(self.sample_rate_entry.get().strip())
             sas_token = get_sas_token(sas_token_path)
@@ -999,8 +1066,75 @@ class UnifiedApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
 
+
+    def _premerge_plot_callback(raw_df):
+        out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+
+        try:
+            # If the UI checkbox is ON → clean before plotting
+            if self.nn_clean_var.get():
+                from functions import nn_homogenize_df
+                raw_df = nn_homogenize_df(
+                    raw_df,
+                    label_col="source_label",
+                    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+                    keep_unconsidered="keep",
+                    downsample_n=None
+                )
+
+            # ALWAYS use your existing plot function
+            from functions import plot_3d_fluorescence_premerge
+            plot_3d_fluorescence_premerge(
+                raw_df, label_col="source_label", out_html=out_html
+            )
+
+            functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+
+        except Exception as e:
+            functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
     def handle_combine_csvs(self):
-        self.df = combine_csvs(self.output_path, expertise_matrix_path, nogui=False, prompt_merge_fn=self.prompt_class_grouping)
+        # Version with NN cleaning in the 3 most important feature axes
+        def _nn_cleaned_premerge_plot_callback(raw_df):
+            out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+            try:
+                # 1) Clean with NN homogenization (processing-only)
+                from functions import nn_homogenize_df
+                cleaned_df = nn_homogenize_df(
+                    raw_df,
+                    label_col="source_label",
+                    feature_cols=("FWS_total", "Fl Red_total", "Fl Orange_total"),
+                    keep_unconsidered="keep",   # or "drop" if you prefer strict survivors
+                    downsample_n=None           # set an int if you want faster previews
+                )
+                from functions import plot_3d_fluorescence_premerge
+                plot_3d_fluorescence_premerge(
+                    cleaned_df,
+                    label_col="source_label",
+                    out_html=out_html
+                )
+                functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+            except Exception as e:
+                functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
+        def _premerge_plot_callback(raw_df):
+            out_html = os.path.join(self.plots_dir, "premerge_3d_fluorescence.html")
+            try:
+                from functions import plot_3d_fluorescence_premerge  # uses same columns as inspect_overlap
+                plot_3d_fluorescence_premerge(raw_df, label_col="source_label", out_html=out_html)
+                # make sure the Plots tab list sees the new file (it watches .png, so we also log info)
+                functions.log_message(f"Pre-merge 3D fluorescence plot written: {out_html}")
+            except Exception as e:
+                functions.log_message(f"[warn] could not write pre-merge 3D plot: {e}")
+
+        self.df = functions.combine_csvs(
+            self.output_path,
+            expertise_matrix_path,
+            nogui=False,
+            prompt_merge_fn=self.prompt_class_grouping,
+            premerge_plot_fn= _premerge_plot_callback,  
+            delete_labels_fn=self.prompt_delete_labels
+        )
 
     def prompt_class_grouping(self,df):
         if df is None or 'source_label' not in df.columns:
@@ -1016,7 +1150,7 @@ class UnifiedApp:
             top = tk.Toplevel(self.root)
             top.title("Merge Class Labels")
 
-            listbox = tk.Listbox(top, selectmode=tk.MULTIPLE, width=50)
+            listbox = tk.Listbox(top, selectmode=tk.MULTIPLE, width=50, height = 50)
             for label in label_list:
                 listbox.insert(tk.END, label)
             listbox.pack(padx=10, pady=10)
@@ -1154,14 +1288,18 @@ class UnifiedApp:
     def build_download_tab(self):
         tk.Label(self.tab_download, text="Blob Directory URL:").pack(pady=5)
         self.url_entry = tk.Entry(self.tab_download, width=80)
-        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
+        #self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/public/exampledata/")
         #self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/labelledmultipleexperts3seas/external/") # This dataset depends on an SAS token having been passed in on the blob tools tab.
+        self.url_entry.insert(0, "https://citprodflowcytosa.blob.core.windows.net/mnceacyzfilesforthomasrutten/manuallypairedxmlsandcyzs/exportedindividuallyfromcytoclus/") # This dataset depends on an SAS token having been passed in on the blob tools tab.
         self.url_entry.pack(pady=5)
         tk.Button(self.tab_download, text="Download Files", command=self.download_blob_directory).pack(pady=5)
         tk.Button(self.tab_download, text="Download cyz2json", command=self.install_all_requirements).pack(pady=5)
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
+        self.nn_clean_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning pre-merge",variable=self.nn_clean_var).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
+        tk.Button(    self.tab_download,    text="Run NN cleaning post-merge",    command=self.handle_nn_cleaning).pack(pady=5)
         tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
         self.max_per_class_entry.insert(0, "100000")
@@ -1228,7 +1366,7 @@ class UnifiedApp:
         # Container URLs
         tk.Label(self.tab_blob_tools, text="Blob Container URL:").pack(pady=5)
         self.url_entry_blob = tk.Entry(self.tab_blob_tools, width=100)
-        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploadnov2024")
+        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploaddec2025")
         self.url_entry_blob.pack(pady=5)
         
         tk.Label(self.tab_blob_tools, text="Output Container Name:").pack(pady=5)
@@ -1250,7 +1388,7 @@ class UnifiedApp:
 
         tk.Label(self.tab_process_blob, text="Blob Container URL:").pack(pady=5)
         self.url_entry_blob = tk.Entry(self.tab_process_blob, width=100)
-        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploadnov2024")
+        self.url_entry_blob.insert(0, "https://citprodflowcytosa.blob.core.windows.net/hdduploaddec2025")
         self.url_entry_blob.pack(pady=5)
 
         tk.Button(self.tab_process_blob, text="Generate Mixfile", command=self.generate_mixfile).pack(pady=5)
@@ -1411,10 +1549,12 @@ class UnifiedApp:
     def process_all(self):
         container = self.url_entry_blob.get().strip()#
         output_blob_folder = self.output_blob_folder.get().strip()
-        print(container)
+        #print(container)
         container_url = self.url_entry_blob.get().strip()
         sas_token_path = self.sas_token_entry.get().strip()
         sas_token = get_sas_token(sas_token_path)
+        #print(container_url)
+        #print(sas_token)
         blob_files = list_blobs(container_url, sas_token)
         processed_files = set()
         log_file_path = "process_log.txt"
@@ -1438,6 +1578,7 @@ class UnifiedApp:
                 except Exception as e:
                     log_message(f"No file to delete: {e} (this is fine)")
             try:
+                #print(url)
                 downloaded_file = download_file(url, self.tool_dir, self.cyz_file)
                 log_message(f"Success: Blob downloaded for {url_notoken}")
                 load_file(self.path_entry.get(), downloaded_file, self.json_file)
@@ -1477,13 +1618,13 @@ class UnifiedApp:
                     ) for category in unique_categories
                 }
                 data['color'] = data['category'].map(color_map)
-                x_99 = np.percentile(data["Fl Yellow_total"], 99.5)
-                y_99 = np.percentile(data["Fl Red_total"], 99.5)
-                z_99 = np.percentile(data["Fl Orange_total"], 99.5)
+                x_99 = np.percentile(data["FWS_total"], 99.5)
+                y_99 = np.percentile(data["Fl_Red_total"], 99.5)
+                z_99 = np.percentile(data["Fl_Orange_total"], 99.5)
                 scatter = go.Scatter3d(
-                    x=data["Fl Yellow_total"],
-                    y=data["Fl Red_total"],
-                    z=data["Fl Orange_total"],
+                    x=data["FWS_total"],
+                    y=data["Fl_Red_total"],
+                    z=data["Fl_Orange_total"],
                     mode='markers',
                     marker=dict(size=5, color=data['color'], showscale=False),
                     text=data['category'],
@@ -1497,9 +1638,9 @@ class UnifiedApp:
                 fig = go.Figure(data=[scatter])
                 fig.update_layout(
                     scene=dict(
-                        xaxis=dict(range=[0, x_99], title="Fl Yellow_total"),
-                        yaxis=dict(range=[0, y_99], title="Fl Red_total"),
-                        zaxis=dict(range=[0, z_99], title="Fl Orange_total"),
+                        xaxis=dict(range=[0, x_99], title="FWS_total"),
+                        yaxis=dict(range=[0, y_99], title="Fl_Red_total"),
+                        zaxis=dict(range=[0, z_99], title="Fl_Orange_total"),
                         camera=camera
                     ),
                     title='3D Data Points'
