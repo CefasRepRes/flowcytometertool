@@ -1,3 +1,4 @@
 \overlap_report
 \__pycache__
 process_log.txt
+\.pytest_cache
