@@ -4,10 +4,8 @@ import pytest
 import sys
 from pathlib import Path
 
-# add repo/src to sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from flowcytometertool.functions import compute_consensual_labels_and_sample_weights
+from functions import compute_consensual_labels_and_sample_weights
 
 
 def assert_eq_df_ignore_row_order(actual: pd.DataFrame, expected: pd.DataFrame, sort_by):
@@ -135,17 +133,17 @@ def test_all_unassigned_leads_to_empty_merge():
     # No ids retained ⇒ inner merge produces empty result
     assert result.empty
 
-
-def test_zero_total_weight_raises_zero_division_error():
-    """
-    With all weights zero, total_weight=0 would cause division by zero per current implementation.
-    This test documents (and protects) the current behavior.
-    If you later change the function to handle this case gracefully, update the test accordingly.
-    """
+def test_zero_total_weight_results_in_zero_sample_weight():
     data = pd.DataFrame({
         "id": [1, 1],
         "source_label": ["A", "B"],
         "weight": [0.0, 0.0],
     })
-    with pytest.raises(ZeroDivisionError):
-        compute_consensual_labels_and_sample_weights(data)
+
+    result = compute_consensual_labels_and_sample_weights(data)
+
+    # id should still appear
+    assert set(result["id"].unique()) == {1}
+
+    # sample_weight should be 0.0 for all rows
+    assert (result["sample_weight"] == 0.0).all()

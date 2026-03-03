@@ -38,6 +38,7 @@ import tempfile
 import sys
 import time
 import webbrowser
+from collections import Counter
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -771,7 +772,6 @@ def choose_zone_folders(output_path):
 
 
 def compute_consensual_labels_and_sample_weights(data):
-    from collections import Counter
 
     def get_weighted_mode(labels, weights):
         counter = Counter()
@@ -780,10 +780,8 @@ def compute_consensual_labels_and_sample_weights(data):
         most_common_label, most_common_weight = counter.most_common(1)[0]
         return most_common_label, most_common_weight
 
-    # Group by 'id'
     grouped = data.groupby('id')
 
-    # Initialize lists to store results
     consensus_labels = []
     sample_weights = []
     ids = []
@@ -791,24 +789,24 @@ def compute_consensual_labels_and_sample_weights(data):
     for name, group in grouped:
         labels = group['source_label']
         weights = group['weight']
-        consensus_label, consensus_weight = get_weighted_mode(labels, weights)
         total_weight = weights.sum()
-        sample_weight = consensus_weight / total_weight
+        consensus_label, consensus_weight = get_weighted_mode(labels, weights)
+        if total_weight == 0:
+            sample_weight = 0.0
+        else:
+            sample_weight = consensus_weight / total_weight
         if consensus_label != "Unassigned Particles":
             ids.append(name)
             consensus_labels.append(consensus_label)
             sample_weights.append(sample_weight)
 
-    # Create a DataFrame with consensus results
     consensus_df = pd.DataFrame({
         'id': ids,
         'consensus_label': consensus_labels,
         'sample_weight': sample_weights
     })
 
-    # Merge back into the original data
     merged_df = data.merge(consensus_df, on='id', how='inner')
-
     return merged_df
 
 
