@@ -1,8 +1,13 @@
 # test_consensus.py
 import pandas as pd
 import pytest
+import sys
+from pathlib import Path
 
-from flow_cytometer_tool import compute_consensual_labels_and_sample_weights
+# add repo/src to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from flowcytometertool.functions import compute_consensual_labels_and_sample_weights
 
 
 def assert_eq_df_ignore_row_order(actual: pd.DataFrame, expected: pd.DataFrame, sort_by):
