@@ -42,6 +42,16 @@ Ideally any users should be familiar with python because in all likelihood somet
 Check [releases](https://github.com/CefasRepRes/flowcytometertool/releases) to download a "distributable". Unzip this, then open the software via:
 Whilst tested on linux, I have only made pyinstaller builds of the software for windows.
 
+## Use
+
+Navigate to the src directory and call the script from there:
+
+	cd src
+
+	python flow_cytometer_tool.py
+	
+
+
 ## Compilation
 
 This was developed minimally on Windows 10 in miniforge3 prompt. You can download this to your machine and compile the program with the command "pyinstaller flow_cytometer_tool.spec"
