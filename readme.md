@@ -39,7 +39,7 @@ Ideally any users should be familiar with python because in all likelihood somet
 
 ## Download
 
-** All old releases have been deleted. Please use only for development at this moment
+** All old releases have been deleted. Please use only for development at this moment **
 
 Check [releases](https://github.com/CefasRepRes/flowcytometertool/releases) to download a "distributable". Unzip this, then open the software via:
 Whilst tested on linux, I have only made pyinstaller builds of the software for windows.
@@ -47,7 +47,11 @@ Whilst tested on linux, I have only made pyinstaller builds of the software for 
 ## Development use
 
 This was developed in miniforge prompt with conda on windows but other distributions could be used.
-Use conda to install environment.yml, failing that, install environment_generic.yml
+Use conda to install environment.yml, failing that, install environment_generic.yml:
+
+	conda env create -f environment.yml
+	
+	activate flowcytometertool
 
 Navigate to the src directory and call the program script from there:
 
