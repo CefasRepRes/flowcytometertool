@@ -56,7 +56,7 @@ if getattr(sys, 'frozen', False):
 else:
     base_path = os.path.abspath(".")
 
-expertise_matrix_path = os.path.join(base_path, "..\expertise_matrix.csv")
+expertise_matrix_path = os.path.join(base_path, "..\matrices\expertise_matrix.csv")
 
 def stratified_subsample(df, target_column, max_per_class=1000):
     return df.groupby(target_column, group_keys=False).apply(lambda x: x.sample(min(len(x), max_per_class), random_state=42)).reset_index(drop=True)
