@@ -270,7 +270,7 @@ class UnifiedApp:
         try:
             from functions import nn_homogenize_df, plot_3d_fluorescence_premerge
 
-            out_html = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
+            out_html = os.path.join(self.plots_dir, "pre_nn_cleaning_3d.html")
             plot_3d_fluorescence_premerge(
                 self.df,
                 label_col="source_label",
@@ -286,7 +286,7 @@ class UnifiedApp:
             )
             # Plot cleaned result
             self.df = cleaned_df
-            out_html2 = os.path.join(self.plots_dir, "post_nn_cleaning_3d2.html")
+            out_html2 = os.path.join(self.plots_dir, "post_nn_cleaning_3d.html")
             plot_3d_fluorescence_premerge(
                 self.df,
                 label_col="source_label",
@@ -1297,9 +1297,9 @@ class UnifiedApp:
         tk.Button(self.tab_download, text="Cyz2json", command=self.cyz2json).pack(pady=5)
         tk.Button(self.tab_download, text="To listmode", command=self.to_listmode).pack(pady=5)
         self.nn_clean_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning pre-merge",variable=self.nn_clean_var).pack(pady=5)
+        tk.Checkbutton(self.tab_download,text="Apply NN-cleaning before classes are merged in combine csvs",variable=self.nn_clean_var).pack(pady=5)
         tk.Button(self.tab_download, text="Combine CSVs", command=self.handle_combine_csvs).pack(pady=5)
-        tk.Button(    self.tab_download,    text="Run NN cleaning post-merge",    command=self.handle_nn_cleaning).pack(pady=5)
+        tk.Button(    self.tab_download,    text="Run NN cleaning post-merge (on the renamed classes)",    command=self.handle_nn_cleaning).pack(pady=5)
         tk.Label(self.tab_download, text="Max samples per class:").pack(pady=5)
         self.max_per_class_entry = tk.Entry(self.tab_download, width=10)
         self.max_per_class_entry.insert(0, "100000")
