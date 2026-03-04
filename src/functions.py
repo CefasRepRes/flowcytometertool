@@ -771,45 +771,121 @@ def choose_zone_folders(output_path):
     return zonechoice
 
 
-def compute_consensual_labels_and_sample_weights(data):
+def compute_consensual_labels_and_sample_weights(
+    data: pd.DataFrame,
+    *,
+    # identity columns
+    filename_col: str = "filename",
+    id_col: str = "id",
+    # labels & weights
+    label_col: str = "source_label",
+    weight_col: str = "weight",
+    # Adoption policy
+    apply_only_on_unanimous: bool = False,   # keep originals unless 100% agreement
+    # Safety/diagnostics during development
+    assert_preserve_order: bool = True,
+    assert_no_row_count_change: bool = True,
+) -> pd.DataFrame:
+    """
+    Compute consensus per *physical particle* identified by (filename + id),
+    preserving the original row order and length.
 
-    def get_weighted_mode(labels, weights):
-        counter = Counter()
-        for label, weight in zip(labels, weights):
-            counter[label] += weight
-        most_common_label, most_common_weight = counter.most_common(1)[0]
-        return most_common_label, most_common_weight
+    Returns the same dataframe plus:
+        - 'consensus_label'  (weighted mode within each (file,id) group)
+        - 'sample_weight'    (max_label_weight / total_weight in group, ∈ [0,1])
 
-    grouped = data.groupby('id')
+    If `apply_only_on_unanimous=True`, `label_col` is overwritten only where
+    `sample_weight == 1.0`; otherwise labels are not changed.
+    """
 
-    consensus_labels = []
-    sample_weights = []
-    ids = []
+    if id_col not in data.columns:
+        raise KeyError(f"Column '{id_col}' not found.")
+    if label_col not in data.columns:
+        raise KeyError(f"Column '{label_col}' not found.")
+    if weight_col not in data.columns:
+        raise KeyError(f"Column '{weight_col}' not found.")
 
-    for name, group in grouped:
-        labels = group['source_label']
-        weights = group['weight']
-        total_weight = weights.sum()
-        consensus_label, consensus_weight = get_weighted_mode(labels, weights)
-        if total_weight == 0:
-            sample_weight = 0.0
+    # We require a file-level identity so that IDs from different files don't collide.
+    filename_candidates = [filename_col, "source_file"]
+    real_filename_col = next((c for c in filename_candidates if c in data.columns), None)
+    if real_filename_col is None:
+        raise KeyError(
+            f"No filename column found. Expected one of: {filename_candidates}. "
+            f"Ensure the combine step adds a file identifier column."
+        )
+
+    df = data.copy()
+    original_index = df.index.copy()
+    original_len = len(df)
+
+    # Normalize text columns used in grouping
+    df[real_filename_col] = df[real_filename_col].astype(str).str.strip()
+    df[label_col] = df[label_col].astype(str).str.strip()
+
+    # Build unique identity per physical particle
+    df["_uid"] = df[real_filename_col] + "_" + df[id_col].astype(str).str.strip()
+
+    # --- Fast path: if each (_uid) appears once and all weights==1, stamp outputs
+    counts = df["_uid"].value_counts(dropna=False)
+    is_singleton = (counts.max() == 1)
+    if is_singleton and df[weight_col].fillna(1.0).eq(1.0).all():
+        df["consensus_label"] = df[label_col]
+        df["sample_weight"] = 1.0
+        if apply_only_on_unanimous:
+            # identical outcome; nothing to change
+            pass
+        if assert_preserve_order:
+            assert df.index.equals(original_index), "Index changed unexpectedly (fast-path)."
+        if assert_no_row_count_change:
+            assert len(df) == original_len, "Row count changed unexpectedly (fast-path)."
+        df.drop(columns=["_uid"], inplace=True)
+        return df
+
+    # --- General path: compute weighted mode within each (_uid)
+    from collections import Counter
+
+    records = []
+    for uid, grp in df.groupby("_uid", sort=False):
+        labels = grp[label_col].tolist()
+        weights = grp[weight_col].astype(float).fillna(0.0).tolist()
+
+        acc = Counter()
+        total_w = 0.0
+        for l, w in zip(labels, weights):
+            acc[l] += w
+            total_w += w
+
+        if not acc:
+            # fallback: no weights—keep first label, zero share
+            consensus_label = labels[0] if labels else ""
+            share = 0.0
         else:
-            sample_weight = consensus_weight / total_weight
-        if consensus_label != "Unassigned Particles":
-            ids.append(name)
-            consensus_labels.append(consensus_label)
-            sample_weights.append(sample_weight)
+            max_w = max(acc.values())
+            # deterministic tie-break on label lexicographic order
+            winners = sorted([k for k, v in acc.items() if v == max_w])
+            consensus_label = winners[0]
+            share = (max_w / total_w) if total_w > 0 else 0.0
 
-    consensus_df = pd.DataFrame({
-        'id': ids,
-        'consensus_label': consensus_labels,
-        'sample_weight': sample_weights
-    })
+        records.append((uid, consensus_label, share))
 
-    merged_df = data.merge(consensus_df, on='id', how='inner')
-    return merged_df
+    cdf = pd.DataFrame(records, columns=["_uid", "consensus_label", "sample_weight"]).set_index("_uid")
 
+    # LEFT-JOIN back to preserve order and cardinality
+    df = df.join(cdf, on="_uid", how="left")
 
+    # Optionally adopt consensus where (and only where) unanimous
+    if apply_only_on_unanimous:
+        unanimous = df["sample_weight"].ge(0.999999999)
+        df.loc[unanimous, label_col] = df.loc[unanimous, "consensus_label"]
+
+    # Safety checks
+    if assert_preserve_order:
+        assert df.index.equals(original_index), "Index changed during consensus join."
+    if assert_no_row_count_change:
+        assert len(df) == original_len, "Row count changed during consensus join."
+
+    df.drop(columns=["_uid"], inplace=True)
+    return df
 
 
 def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_merge_fn = None, premerge_plot_fn=None, delete_labels_fn=None):
@@ -834,8 +910,13 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
             print(file)
             if file.endswith(".csv") and not file.endswith("instrument.csv"):
                 file_path = os.path.join(root, file)
+                base = os.path.basename(file_path)
+                m = re.match(r"(.+?)_\w+\.cyz\.csv$", base, flags=re.IGNORECASE)
+                cyz_base = m.group(1) if m else os.path.splitext(base)[0]
                 try:
                     df = pd.read_csv(file_path)
+                    if "filename" not in df.columns:
+                        df["filename"] = cyz_base                    
                 except:
                     print(f"Skipping empty or malformed file: {file_path}")
                     continue
@@ -888,12 +969,11 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     # Assign person weights
     combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
 
-    # Compute consensus label per particls - this is indeed the source of the shuffling of our labels
-    #combined_df = compute_consensual_labels_and_sample_weights(combined_df)
-    #combined_df['source_label'] = combined_df['consensus_label']
-    #print(combined_df)
-    #combined_df = combined_df.reset_index()
-    #print(combined_df)
+    # Compute consensus label per particls - this was indeed where the labels were shuffled , because it was not respecting particle ID 1 from file 1 is not the same as particle ID 1 from file 2
+    print(combined_df)
+    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    combined_df['source_label'] = combined_df['consensus_label']
+    print(combined_df)
     return combined_df
 
 
