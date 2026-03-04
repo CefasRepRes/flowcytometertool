@@ -1,6 +1,5 @@
 
-> ⚠️ **THIS REPOSITORY IS CURRENTLY BROKEN — DO NOT USE**
-> A major bug has been discovered and it has not yet been fixed properly. See Issue #43 for details.
+> ⚠️ **This code is released under open government license and is provided without warranty. It is currently under active development and has not been subjected to peer or user testing. Outputs should be interpreted with caution**
 
 
 ## Context
