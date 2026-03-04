@@ -888,9 +888,9 @@ def build_consensual_dataset(base_path, expertise_levels, zonechoice, prompt_mer
     # Assign person weights
     combined_df['weight'] = combined_df['person'].map(person_to_weight).fillna(1)
 
-    # Compute consensus label per particls
-    combined_df = compute_consensual_labels_and_sample_weights(combined_df)
-    combined_df['source_label'] = combined_df['consensus_label']
+    # Compute consensus label per particls - this is indeed the source of the shuffling of our labels
+    #combined_df = compute_consensual_labels_and_sample_weights(combined_df)
+    #combined_df['source_label'] = combined_df['consensus_label']
     #print(combined_df)
     #combined_df = combined_df.reset_index()
     #print(combined_df)
