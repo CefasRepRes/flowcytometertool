@@ -223,19 +223,33 @@ def build_measurement_row(instrument_df, predictions_df, instrument_csv_path=Non
     row["duration"] = _get_first_present(instrument_df, ["duration", "measurementResults_maximum_measurement_time_s"])
 
     # 5) Particles (from predictions)
-    if predictions_df is not None:
-        particleCount = len(predictions_df)
-        row["particleCount"] = particleCount
-        row["particleConcentration"] = (
-            particleCount / row["pumpedVolume"] if pd.notna(row["pumpedVolume"]) and row["pumpedVolume"] > 0 else np.nan
-        )
-        row["particleRate"] = (
-            particleCount / row["duration"] if pd.notna(row["duration"]) and row["duration"] > 0 else np.nan
-        )
+        
+    # 5) Particles — use instrument-recorded count, not predictions length
+    instrument_particle_count = _get_first_present(
+        instrument_df,
+        ["measurementResults_particleCount", "particleCount"]
+    )
+
+    if pd.notna(instrument_particle_count):
+        # Prefer the value recorded by the instrument JSON
+        row["particleCount"] = instrument_particle_count
     else:
-        row["particleCount"] = np.nan
-        row["particleConcentration"] = np.nan
-        row["particleRate"] = np.nan
+        # Fallback if instrument metadata is missing
+        row["particleCount"] = float(len(predictions_df)) if predictions_df is not None else np.nan
+
+    # Derived QC metrics
+    row["particleConcentration"] = (
+        row["particleCount"] / row["pumpedVolume"]
+        if pd.notna(row["particleCount"]) and pd.notna(row["pumpedVolume"]) and row["pumpedVolume"] > 0
+        else np.nan
+    )
+
+    row["particleRate"] = (
+        row["particleCount"] / row["duration"]
+        if pd.notna(row["particleCount"]) and pd.notna(row["duration"]) and row["duration"] > 0
+        else np.nan
+    )
+    
 
     # 6) Key sensors we want to trend (store a single number per file)
     for key, candidates in SENSOR_MAP.items():
