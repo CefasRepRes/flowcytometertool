@@ -157,8 +157,7 @@ SENSOR_MAP = {
     "sheathTemperature": ["measurementResults_sheathTemperature", "sheathTemperature"],
     "systemTemperature": ["measurementResults_systemTemperature", "systemTemperature"],
     "laserBeamWidth": ["laserBeamWidth", "measurementSettings_CytoSettings_LaserBeamWidth"],
-    "sampleCoreSpeed": ["sampleCoreSpeed", "measurementSettings_CytoSettings_SampleCorespeed", "measurementSettings_CytoSettings_SampleCoreSpeed"],
-    "particleRateSensor": ["measurementResults_particleRate", "particleRate"],  # if present
+    "sampleCoreSpeed": ["sampleCoreSpeed", "measurementSettings_CytoSettings_SampleCorespeed", "measurementSettings_CytoSettings_SampleCoreSpeed"]
 }
 
 # Limits map: we’ll try to discover from instrument.csv SensorLimits_* columns
@@ -229,6 +228,24 @@ def build_measurement_row(instrument_df, predictions_df, instrument_csv_path=Non
         instrument_df,
         ["measurementResults_particleCount", "particleCount"]
     )
+    
+    # External pump time (instrument true measurement window)
+    external_pump_time = _get_first_present(
+        instrument_df,
+        ["measurementSettings_CytoSettings_CytoSettings_ExternalPumpTime",
+         "ExternalPumpTime"]  # fallback if already flattened differently
+    )
+    row["externalPumpTime"] = external_pump_time
+    # Compute particle rate using instrument values
+    if pd.notna(instrument_particle_count) and pd.notna(external_pump_time) and external_pump_time > 0:
+        row["particleRate"] = instrument_particle_count / external_pump_time
+    else:
+        # fallback to previous definition
+        row["particleRate"] = (
+            instrument_particle_count / row["duration"]
+            if pd.notna(instrument_particle_count) and pd.notna(row["duration"]) and row["duration"] > 0
+            else np.nan
+        )    
 
     if pd.notna(instrument_particle_count):
         # Prefer the value recorded by the instrument JSON
@@ -244,12 +261,6 @@ def build_measurement_row(instrument_df, predictions_df, instrument_csv_path=Non
         else np.nan
     )
 
-    row["particleRate"] = (
-        row["particleCount"] / row["duration"]
-        if pd.notna(row["particleCount"]) and pd.notna(row["duration"]) and row["duration"] > 0
-        else np.nan
-    )
-    
 
     # 6) Key sensors we want to trend (store a single number per file)
     for key, candidates in SENSOR_MAP.items():
