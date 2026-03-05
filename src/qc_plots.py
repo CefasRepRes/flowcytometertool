@@ -152,8 +152,8 @@ def _pick_timestamp(instrument_df, instrument_csv_path=None):
 
 SENSOR_MAP = {
     # name_in_qc_table : [candidate column names in instrument.csv]
-    "absolutePressure": ["measurementResults_absolutePressure", "pressureAbsolute"],
-    "differentialPressure": ["measurementResults_differentialPressure", "pressureDifferential"],
+    "absolutePressure": ["measurementResults_pressureAbsolute", "pressureAbsolute"],
+    "differentialPressure": ["measurementResults_pressureDifferential", "pressureDifferential"],
     "sheathTemperature": ["measurementResults_sheathTemperature", "sheathTemperature"],
     "systemTemperature": ["measurementResults_systemTemperature", "systemTemperature"],
     "laserBeamWidth": ["laserBeamWidth", "measurementSettings_CytoSettings_LaserBeamWidth"],
@@ -167,9 +167,9 @@ SENSOR_LIMIT_CANDIDATES = {
                            "measurementSettings_CytoSettings_SensorLimits_SheathTemp_maxValue")],
     "systemTemperature": [("measurementSettings_CytoSettings_SensorLimits_SystemTemp_minValue",
                            "measurementSettings_CytoSettings_SensorLimits_SystemTemp_maxValue")],
-    "absolutePressure": [("measurementSettings_CytoSettings_SensorLimits_PressureAbs_minValue",
+    "pressureAbsolute": [("measurementSettings_CytoSettings_SensorLimits_PressureAbs_minValue",
                           "measurementSettings_CytoSettings_SensorLimits_PressureAbs_maxValue")],
-    "differentialPressure": [("measurementSettings_CytoSettings_SensorLimits_PressureDiff_minValue",
+    "pressureDifferential": [("measurementSettings_CytoSettings_SensorLimits_PressureDiff_minValue",
                                "measurementSettings_CytoSettings_SensorLimits_PressureDiff_maxValue")],
 }
 
@@ -221,7 +221,6 @@ def build_measurement_row(instrument_df, predictions_df, instrument_csv_path=Non
     # 4) Duration
     row["duration"] = _get_first_present(instrument_df, ["duration", "measurementResults_maximum_measurement_time_s"])
 
-    # 5) Particles (from predictions)
         
     # 5) Particles — use instrument-recorded count, not predictions length
     instrument_particle_count = _get_first_present(
