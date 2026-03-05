@@ -157,13 +157,7 @@ SENSOR_MAP = {
     "sheathTemperature": ["measurementResults_sheathTemperature", "sheathTemperature"],
     "systemTemperature": ["measurementResults_systemTemperature", "systemTemperature"],
     "laserBeamWidth": ["laserBeamWidth", "measurementSettings_CytoSettings_LaserBeamWidth"],
-    "sampleCoreSpeed": ["sampleCoreSpeed", "measurementSettings_CytoSettings_SampleCorespeed", "measurementSettings_CytoSettings_SampleCoreSpeed"],
-    "laserTemperature": [
-        "measurementResults_laserTemperature", "laserTemperature"
-    ],
-    "PMTtemperature": [
-        "measurementResults_PMTtemperature", "PMTtemperature"
-    ]
+    "sampleCoreSpeed": ["sampleCoreSpeed", "measurementSettings_CytoSettings_SampleCorespeed", "measurementSettings_CytoSettings_SampleCoreSpeed"]
 }
 
 # Limits map: we’ll try to discover from instrument.csv SensorLimits_* columns
@@ -177,17 +171,7 @@ SENSOR_LIMIT_CANDIDATES = {
                           "measurementSettings_CytoSettings_SensorLimits_PressureAbs_maxValue")],
     "pressureDifferential": [("measurementSettings_CytoSettings_SensorLimits_PressureDiff_minValue",
                                "measurementSettings_CytoSettings_SensorLimits_PressureDiff_maxValue")],
-    "laserTemperature": [
-        ("measurementSettings_CytoSettings_SensorLimits_LaserTemp_minValue",
-         "measurementSettings_CytoSettings_SensorLimits_LaserTemp_maxValue")
-    ],
-    "PMTtemperature": [
-        ("measurementSettings_CytoSettings_SensorLimits_PMTTemp_minValue",
-         "measurementSettings_CytoSettings_SensorLimits_PMTTemp_maxValue")
-    ]                            
 }
-
-
 
 def _get_first_present(df, names):
     for n in names:
@@ -627,230 +611,6 @@ def plot_percent_of_max_signal(preds_df, file_prefix, out_dir, max_points_cap=60
     fig.suptitle(f"% of Max Fluorescence Signal • {file_prefix}", y=1.02)
     _safe_savefig(os.path.join(out_dir, f"{file_prefix}_percentOfMax.png"))
     
-def _first_present_value(instrument_df, names, default=np.nan):
-    for n in names:
-        if n in instrument_df.columns:
-            v = pd.to_numeric(instrument_df[n].iloc[0], errors="coerce")
-            if pd.notna(v):
-                return float(v)
-    return default
-
-def _val_with_limits(name, row_value, sensor_limits, fallback_range):
-    """
-    Decide (value, ok, lo, hi) using instrument limits if present, else fallback.
-    fallback_range: (lo, hi) or (None, None) to skip bounds.
-    """
-    lo, hi = None, None
-    if sensor_limits and name in sensor_limits:
-        lo, hi = sensor_limits[name]
-    if lo is None or hi is None:
-        # use fallback if instrument limits missing
-        lo = fallback_range[0] if fallback_range else None
-        hi = fallback_range[1] if fallback_range else None
-    ok = True
-    if lo is not None and pd.notna(row_value) and row_value < lo:
-        ok = False
-    if hi is not None and pd.notna(row_value) and row_value > hi:
-        ok = False
-    return row_value, ok, lo, hi
-
-def _median_ratio(preds_df, num_col, den_col):
-    if preds_df is None or num_col not in preds_df.columns or den_col not in preds_df.columns:
-        return np.nan
-    tmp = preds_df[[num_col, den_col]].replace([np.inf, -np.inf], np.nan).dropna()
-    if tmp.empty:
-        return np.nan
-    r = pd.to_numeric(tmp[num_col], errors="coerce") / pd.to_numeric(tmp[den_col], errors="coerce").replace(0, np.nan)
-    r = r.replace([np.inf, -np.inf], np.nan).dropna()
-    if r.empty:
-        return np.nan
-    return float(np.median(r))
-
-def _flat_signal_fraction(preds_df):
-    """Fraction of particles where any fluorescence avg/max >= 0.8 (Yellow/Orange/Red)."""
-    if preds_df is None:
-        return np.nan
-    channels = [
-        ("Fl_Yellow_average", "Fl_Yellow_maximum"),
-        ("Fl_Orange_average", "Fl_Orange_maximum"),
-        ("Fl_Red_average",    "Fl_Red_maximum"),
-    ]
-    found = [(a, m) for a, m in channels if a in preds_df.columns and m in preds_df.columns]
-    if not found:
-        return np.nan
-    frac_hits = []
-    for a, m in found:
-        df = preds_df[[a, m]].replace([np.inf, -np.inf], np.nan).dropna()
-        if df.empty:
-            continue
-        ratio = pd.to_numeric(df[a], errors="coerce") / pd.to_numeric(df[m], errors="coerce").replace(0, np.nan)
-        ratio = ratio.replace([np.inf, -np.inf], np.nan).dropna()
-        if ratio.empty:
-            continue
-        frac_hits.append(np.mean(ratio >= 0.8))
-    if not frac_hits:
-        return np.nan
-    # If multiple channels exist, take the max exceedance across them
-    return float(np.max(frac_hits))
-
-def compute_health_flags(instrument_df, preds_df, row, sensor_limits):
-    """
-    Returns: dict of {metric: {value, ok, details}}, plus overall_ok boolean and list of failed checks.
-    Uses instrument limits where present; otherwise applies reasonable fallback ranges.
-    """
-    health = {}
-    failures = []
-
-    # 1) Analysed volume > 0
-    analysed = row.get("analysedVolume", np.nan)
-    ok = pd.notna(analysed) and analysed > 3000
-    health["analysedVolume"] = {"value": analysed, "ok": ok, "rule": "> 3000 µL"}
-    if not ok: failures.append("Analysed volume")
-
-    # 2) Total events >= 500
-    total_events = row.get("particleCount", np.nan)
-    ok = pd.notna(total_events) and total_events >= 5000
-    health["totalEvents"] = {"value": total_events, "ok": ok, "rule": "≥ 5000"}
-    if not ok: failures.append("Total events")
-
-    # 3) Particles/sec within band
-    rate = row.get("particleRate", np.nan)
-    # Prefer using externalPumpTime-derived rate; already computed in your row.
-    lo, hi = 5, 5000
-    ok = pd.notna(rate) and (rate >= lo) and (rate <= hi)
-    health["particlesPerSec"] = {"value": rate, "ok": ok, "rule": f"{lo}–{hi} 1/s (fallback)"}
-    if not ok: failures.append("Particles/sec")
-
-    # 4) Abs pressure
-    absP = row.get("absolutePressure")
-    if absP is None or pd.isna(absP):
-        absP = _first_present_value(instrument_df, SENSOR_MAP["absolutePressure"])
-    v, ok, lo, hi = _val_with_limits("absolutePressure", absP, sensor_limits, (0, 1000))
-    health["absolutePressure"] = {"value": v, "ok": ok, "rule": f"{lo}–{hi} mbar"}
-    if not ok: failures.append("Absolute pressure")
-
-    # 5) Diff pressure
-    dP = row.get("differentialPressure")
-    if dP is None or pd.isna(dP):
-        dP = _first_present_value(instrument_df, SENSOR_MAP["differentialPressure"])
-    v, ok, lo, hi = _val_with_limits("differentialPressure", dP, sensor_limits, (-500.0, 500.0))
-    health["differentialPressure"] = {"value": v, "ok": ok, "rule": f"{lo}–{hi} mbar"}
-    if not ok: failures.append("Differential pressure")
-
-    # 6) FWSR/FWSL median ratio
-    fws_ratio = _median_ratio(preds_df, "Forward_Scatter_Right_total", "Forward_Scatter_Left_total")
-    ok = pd.notna(fws_ratio) and (0.75 <= fws_ratio <= 1.25)
-    health["FWSR_over_FWSL"] = {"value": fws_ratio, "ok": ok, "rule": "0.80–1.25 (median)"}
-    if not ok: failures.append("FWSR/FWSL ratio")
-
-    # 7) Temperatures: laser / sheath / PMT / system
-    for metric, fallback in [
-        ("laserTemperature",  (10.0, 45.0)),
-        ("sheathTemperature", (5.0, 35.0)),
-        ("PMTtemperature",    (5.0, 55.0)),
-        ("systemTemperature", (5.0, 55.0)),
-    ]:
-        val = row.get(metric)
-        if val is None or pd.isna(val):
-            # if not pre-stored in the row, try to read once from instrument df
-            val = _first_present_value(instrument_df, SENSOR_MAP.get(metric, []))
-        v, ok, lo, hi = _val_with_limits(metric, val, sensor_limits, fallback)
-        health[metric] = {"value": v, "ok": ok, "rule": f"{lo}–{hi} °C"}
-        if not ok:
-            pretty = metric.replace("Temperature"," Temperature").replace("PMT","PMT ")
-            failures.append(pretty.strip())
-
-    # 8) % flat signal (max across Y/O/R)
-    flat_frac = _flat_signal_fraction(preds_df)
-    ok = pd.notna(flat_frac) and (flat_frac <= 0.10)  # 10% threshold
-    health["flatSignalFrac"] = {"value": flat_frac, "ok": ok, "rule": "≤ 10% with avg/max ≥ 0.8"}
-    if not ok: failures.append("% flat signal")
-
-    overall_ok = len(failures) == 0
-    return health, overall_ok, failures
-
-def plot_health_summary(health, overall_ok, failures, file_prefix, out_path):
-    """
-    Compact dashboard with traffic lights and rules. One row per check + overall status.
-    """
-    if not health:
-        return
-
-    items = [
-        ("Analysed volume", "analysedVolume", "µL"),
-        ("Total events", "totalEvents", ""),
-        ("Particles/sec", "particlesPerSec", "1/s"),
-        ("Abs pressure", "absolutePressure", "mbar"),
-        ("Diff pressure", "differentialPressure", "mbar"),
-        ("FWSR/FWSL", "FWSR_over_FWSL", ""),
-        ("Laser temp", "laserTemperature", "°C"),
-        ("Sheath temp", "sheathTemperature", "°C"),
-        ("PMT temp", "PMTtemperature", "°C"),
-        ("System temp", "systemTemperature", "°C"),
-        ("% flat signal", "flatSignalFrac", ""),
-    ]
-    # filter to those present
-    rows = [(label, key, unit) for (label, key, unit) in items if key in health]
-
-    fig, ax = plt.subplots(figsize=(9.5, 0.7 + 0.45*len(rows)))
-    ax.axis("off")
-
-    y0 = 1.0
-    dy = 0.08
-    for i, (label, key, unit) in enumerate(rows):
-        rec_y = y0 - (i+1)*dy
-        ok = health[key]["ok"]
-        color = "#4CAF50" if ok else "#E74C3C"  # green / red
-
-        # background swatch
-        ax.add_patch(plt.Rectangle((0.01, rec_y-0.035), 0.02, 0.06, color=color, transform=ax.transAxes))
-
-        # label
-        ax.text(0.05, rec_y, label, fontsize=10, va="center", transform=ax.transAxes)
-
-        # value
-        v = health[key]["value"]
-        v_str = "—"
-        if pd.notna(v):
-            if key == "flatSignalFrac":
-                v_str = f"{100*v:.1f}%"
-            elif isinstance(v, float):
-                v_str = f"{v:,.3g} {unit}".strip()
-            else:
-                v_str = f"{v} {unit}".strip()
-
-        # rule
-        rule = health[key]["rule"]
-
-        ax.text(0.42, rec_y, v_str, fontsize=10, va="center", transform=ax.transAxes)
-        ax.text(0.64, rec_y, rule, fontsize=9, va="center", color="#555", transform=ax.transAxes)
-
-    header = f"HEALTH: {'GREEN' if overall_ok else 'RED'} — {file_prefix}"
-    subtitle = "" if overall_ok else ("Failed: " + ", ".join(failures[:5]) + ("…" if len(failures) > 5 else ""))
-
-    ax.text(0.01, y0, header, fontsize=12, weight="bold", transform=ax.transAxes)
-    if subtitle:
-        ax.text(0.01, y0 - 0.08, subtitle, fontsize=9, color="#E74C3C", transform=ax.transAxes)
-
-    _safe_savefig(out_path)
-
-def append_health_row(start_ts, file_prefix, health, overall_ok, csv_path):
-    flat = {
-        "start": start_ts,
-        "file_id": file_prefix,
-        "overall_ok": bool(overall_ok),
-    }
-    # Flatten health metrics into columns: <metric>_value, <metric>_ok
-    for k, d in health.items():
-        flat[f"{k}_value"] = d.get("value")
-        flat[f"{k}_ok"] = bool(d.get("ok"))
-    if os.path.exists(csv_path):
-        df = pd.read_csv(csv_path)
-        df = pd.concat([df, pd.DataFrame([flat])], ignore_index=True)
-    else:
-        df = pd.DataFrame([flat])
-    df.to_csv(csv_path, index=False)
-    return df
 
 # ---------- Main entry ----------
 
@@ -874,23 +634,6 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
 
     # --- Limits for sensors (from current instrument file, if available) ---
     sensor_limits = _get_limits_from_instrument(inst)
-    
-    # --- Health evaluation ---
-    health, overall_ok, failures = compute_health_flags(inst, preds, row, sensor_limits)
-
-    # Write rolling health CSV
-    health_csv = os.path.join(plots_dir, "qc_health.csv")
-    append_health_row(row["start"], file_prefix, health, overall_ok, health_csv)
-
-    # Health summary image
-    plot_health_summary(
-        health,
-        overall_ok,
-        failures,
-        file_prefix,
-        os.path.join(plots_dir, "health_summary.png")
-    )
-    
 
     # --- Ensure subfolders ---
     os.makedirs(plots_dir, exist_ok=True)
