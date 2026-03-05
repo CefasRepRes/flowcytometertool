@@ -534,6 +534,84 @@ def plot_batch_pies_grid(class_counts_df, out_path, last_n=12):
     fig.suptitle("Batch overview: class pies (last N files)", y=1.02)
     _safe_savefig(out_path)
 
+
+def plot_percent_of_max_signal(preds_df, file_prefix, out_dir, max_points_cap=60000):
+    """
+    QC plot showing how close each fluorescence channel's average signal is to its max.
+    Used to detect PMT saturation (average/max approaching 1.0; >0.8 is concerning).
+
+    Expected columns (any that exist will be plotted):
+        - Fl_Yellow_average      / Fl_Yellow_maximum
+        - Fl_Orange_average      / Fl_Orange_maximum
+        - Fl_Red_average         / Fl_Red_maximum
+    """
+
+    if preds_df is None:
+        return
+
+    channel_pairs = {
+        "Yellow": ("Fl_Yellow_average", "Fl_Yellow_maximum"),
+        "Orange": ("Fl_Orange_average", "Fl_Orange_maximum"),
+        "Red":    ("Fl_Red_average",    "Fl_Red_maximum"),
+    }
+
+    # Collect computed ratios per channel
+    ratios = {}
+
+    for color, (avg_col, max_col) in channel_pairs.items():
+        if avg_col in preds_df.columns and max_col in preds_df.columns:
+            df = preds_df[[avg_col, max_col]].copy()
+            df = df.replace([np.inf, -np.inf], np.nan).dropna()
+            if len(df) == 0:
+                continue
+            # avoid divide-by-zero
+            df["ratio"] = df[avg_col] / df[max_col].replace(0, np.nan)
+            df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=["ratio"])
+            if len(df) > 0:
+                ratios[color] = df["ratio"].values
+
+    if not ratios:
+        return  # nothing to plot
+
+    # Determine subplot layout
+    n = len(ratios)
+    cols = 1
+    rows = n
+    fig, axes = plt.subplots(rows, cols, figsize=(7, 3.5 * rows), squeeze=False)
+    axes = axes.flatten()
+
+    for ax, (color, vals) in zip(axes, ratios.items()):
+        N = len(vals)
+
+        # --- Adaptive thinning (same model as FWS scatter) ---
+        base = 8000
+        growth = 22000
+        scale = 3000
+        target = base + growth * np.log10(N / scale + 1.0)
+        target = int(min(max_points_cap, max(base, target)))
+
+        if target < N:
+            p = target / N
+            seed = abs(hash((file_prefix, color))) % (2**32)
+            rng = np.random.default_rng(seed)
+            keep = rng.random(N) < p
+            vals = vals[keep]
+
+        x = np.arange(len(vals))
+
+        ax.scatter(x, vals, s=4, alpha=0.7, color="#4C72B0")
+        ax.axhline(0.8, color="red", lw=1.2, ls="--", alpha=0.8)
+
+        ax.set_ylim(0, 1.0)
+        ax.set_ylabel("Average / Maximum")
+        ax.set_title(f"{color} (% of max): n={N:,} → shown={len(vals):,}")
+
+    axes[-1].set_xlabel("Particle index (thinned)")
+
+    fig.suptitle(f"% of Max Fluorescence Signal • {file_prefix}", y=1.02)
+    _safe_savefig(os.path.join(out_dir, f"{file_prefix}_percentOfMax.png"))
+    
+
 # ---------- Main entry ----------
 
 def update_after_file(instrument_csv, predictions_csv, plots_dir):
@@ -569,6 +647,9 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
 
     # Per-file pies and bars
     plot_class_pie_and_bar(preds, file_prefix, plots_dir)
+    
+    # Per-file PMT saturation indicator (% of max signal per channel)
+    plot_percent_of_max_signal(preds, file_prefix, plots_dir)
 
     # Per-file FWS-L vs FWS-R scatter (w/ adaptive thinning)
     plot_fws_scatter(preds, file_prefix, plots_dir)
