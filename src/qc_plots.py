@@ -38,7 +38,81 @@ def _safe_savefig(path):
     plt.savefig(path, bbox_inches="tight")
     plt.close()
 
-# ---------- Timestamp detection ----------
+def plot_fws_scatter(preds_df, file_prefix, out_dir, max_points_cap=60000):
+    """
+    Per-file scatter of Forward Scatter Left vs Right with adaptive thinning.
+    Expected columns in predictions CSV:
+      - 'Forward_Scatter_Left_total'
+      - 'Forward_Scatter_Right_total'
+
+    Thinning strategy (probabilistic / Poisson thinning):
+      - Compute target_points = base + growth * log10(N / scale + 1)
+      - Keep each point with probability p = min(1, target_points / N)
+      - Cap the target at max_points_cap to bound runtime and file size.
+
+    This preserves the overall shape without biasing dense regions (vs top-N).
+    """
+    if preds_df is None:
+        return
+    req = ["Forward_Scatter_Left_total", "Forward_Scatter_Right_total"]
+    if not all(c in preds_df.columns for c in req):
+        return
+
+    df = preds_df[req].copy()
+    df = df.replace([np.inf, -np.inf], np.nan).dropna()
+    n = len(df)
+    if n == 0:
+        return
+
+    # --- Adaptive target curve (sub-linear growth with log) ---
+    # Tunables:
+    base = 8000          # show ~all up to ~8k
+    growth = 22000       # additional points gained via log growth
+    scale = 3000         # controls where the log starts to take off
+    target = base + growth * np.log10(n / scale + 1.0)
+    target = int(min(max_points_cap, max(base, target)))
+
+    # --- Probabilistic thinning (density-agnostic) ---
+    if target < n:
+        p = target / n
+        # Reproducible RNG per file (stable plot when re-run)
+        seed = abs(hash(file_prefix)) % (2**32)
+        rng = np.random.default_rng(seed)
+        keep_mask = rng.random(n) < p
+        df = df.loc[keep_mask]
+    # else: n is already small; keep all
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(6.5, 6.0))
+    ax.scatter(
+        df["Forward_Scatter_Left_total"].values,
+        df["Forward_Scatter_Right_total"].values,
+        s=4, alpha=0.7, linewidths=0, color="#4C72B0"
+    )
+    ax.set_xlabel("Forward Scatter (Left) — total")
+    ax.set_ylabel("Forward Scatter (Right) — total")
+    ax.set_title(f"FWS L vs R (thinned): {file_prefix}  •  n={n:,}  →  shown={len(df):,}")
+
+    # Tidy axes (robust to outliers)
+    try:
+        xlims = np.nanpercentile(df["Forward_Scatter_Left_total"], [1, 99])
+        ylims = np.nanpercentile(df["Forward_Scatter_Right_total"], [1, 99])
+        pad_x = 0.08 * (xlims[1] - xlims[0] + 1e-9)
+        pad_y = 0.08 * (ylims[1] - ylims[0] + 1e-9)
+        ax.set_xlim(xlims[0] - pad_x, xlims[1] + pad_x)
+        ax.set_ylim(ylims[0] - pad_y, ylims[1] + pad_y)
+    except Exception:
+        pass
+
+    # Optional: y=x reference (quick symmetry check)
+    try:
+        lo = min(ax.get_xlim()[0], ax.get_ylim()[0])
+        hi = max(ax.get_xlim()[1], ax.get_ylim()[1])
+        ax.plot([lo, hi], [lo, hi], color="#888888", lw=1, ls="--", alpha=0.7)
+    except Exception:
+        pass
+
+    _safe_savefig(os.path.join(out_dir, f"{file_prefix}_FWS_L_vs_R.png"))
 
 def _pick_timestamp(instrument_df, instrument_csv_path=None):
     """
@@ -472,6 +546,9 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
     # Per-file pies and bars
     plot_class_pie_and_bar(preds, file_prefix, plots_dir)
 
+    # Per-file FWS-L vs FWS-R scatter (w/ adaptive thinning)
+    plot_fws_scatter(preds, file_prefix, plots_dir)
+    
     # Class composition over time + batch grid
     plot_class_stacked_over_time(class_df, os.path.join(plots_dir, "classComposition_over_time.png"))
     plot_batch_pies_grid(class_df, os.path.join(plots_dir, "batch_pies_grid.png"), last_n=12)
