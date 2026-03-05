@@ -152,8 +152,8 @@ def _pick_timestamp(instrument_df, instrument_csv_path=None):
 
 SENSOR_MAP = {
     # name_in_qc_table : [candidate column names in instrument.csv]
-    "absolutePressure": ["measurementResults_absolutePressure", "absolutePressure"],
-    "differentialPressure": ["measurementResults_differentialPressure", "differentialPressure"],
+    "absolutePressure": ["measurementResults_absolutePressure", "pressureAbsolute"],
+    "differentialPressure": ["measurementResults_differentialPressure", "pressureDifferential"],
     "sheathTemperature": ["measurementResults_sheathTemperature", "sheathTemperature"],
     "systemTemperature": ["measurementResults_systemTemperature", "systemTemperature"],
     "laserBeamWidth": ["laserBeamWidth", "measurementSettings_CytoSettings_LaserBeamWidth"],
