@@ -26,6 +26,7 @@ import time
 from PIL import Image, ImageTk
 import platform
 import urllib.request
+import qc_plots
 
 #import multiprocessing
 
@@ -1596,6 +1597,7 @@ class UnifiedApp:
                 prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
                 prediction_counts.columns = ['class', 'count']
                 prediction_counts.to_csv(prediction_counts_path, index=False)
+                qc_plots.update_after_file(instrument_file, predictions_file, self.plots_dir)                
                 upload_to_blob(prediction_counts_path,  sas_token,container, output_blob_folder)
                 log_message(f"Success: counted {url_notoken}")
                 data = pd.read_csv(predictions_file)

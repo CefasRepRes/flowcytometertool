@@ -39,6 +39,7 @@ import sys
 import time
 import webbrowser
 from collections import Counter
+import qc_plots
 
 __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset","platform","run_backend_only","argparse","summarize_predictions","download_blobs", "convert_cyz_to_json", "compile_cyz2json_from_release",
     "compile_r_requirements", "flatten_dict", "dict_to_csv", "clear_temp_folder", "download_file",
@@ -539,7 +540,10 @@ class FileHandler(FileSystemEventHandler):
             prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
             prediction_counts.columns = ['class', 'count']
             prediction_counts_path = predictions_file + "_counts.csv"
-            prediction_counts.to_csv(prediction_counts_path, index=False)
+            prediction_counts.to_csv(prediction_counts_path, index=False)            
+            instrument_csv = instrument_file
+            predictions_csv = predictions_file
+            qc_plots.update_after_file(instrument_csv, predictions_csv, self.output_folder)                        
             log_message(f"Success: counted {file_path}")
 
             data = pd.read_csv(predictions_file)
@@ -659,7 +663,7 @@ def wait_for_file_release(file_path, timeout=30, interval=1):
 
 def load_file(cyz2json_path, downloaded_file, json_file):
     try:
-        subprocess.run(["dotnet", cyz2json_path, downloaded_file, "--output", json_file], check=True)
+        subprocess.run(["dotnet", cyz2json_path, downloaded_file, "--output", json_file, "--metadatagreedy"], check=True)
     except subprocess.CalledProcessError as e:
         log_message(f"Processing Error: Failed to process file: {e}")
 
@@ -1214,7 +1218,7 @@ def convert_cyz_to_json(input_dir, output_dir, dll_path):
                 dst_dir = os.path.join(output_dir, rel_dir)
                 os.makedirs(dst_dir, exist_ok=True)
                 dst_file = os.path.join(dst_dir, file + ".json")
-                subprocess.run(["dotnet", dll_path, full_path, "--output", dst_file], check=True)
+                subprocess.run(["dotnet", dll_path, full_path, "--output", dst_file, "--metadatagreedy"], check=True)
 
 
 def compile_cyz2json_from_release(cyz2json_dir, path_entry):
