@@ -215,8 +215,8 @@ def build_measurement_row(instrument_df, predictions_df, instrument_csv_path=Non
         row["triggerLevel"] = instrument_df[guess[0]].iloc[0] if guess else "unknown"
 
     # 3) Volumes
-    row["pumpedVolume"]   = _get_first_present(instrument_df, ["pumpedVolume", "measurementResults_pumped_volume"])
-    row["analysedVolume"] = _get_first_present(instrument_df, ["analysedVolume", "measurementResults_analysed_volume"])
+    row["pumpedVolume"]   = _get_first_present(instrument_df, ["pumpedVolume", "measurementResults_pumpedVolume"])
+    row["analysedVolume"] = _get_first_present(instrument_df, ["analysedVolume", "measurementResults_analysedVolume"])
     row["halfPumpedVolume"] = row["pumpedVolume"]/2 if pd.notna(row["pumpedVolume"]) else np.nan
 
     # 4) Duration
