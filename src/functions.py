@@ -1231,9 +1231,9 @@ def compile_cyz2json_from_release(cyz2json_dir, path_entry):
         # Detect OS and choose appropriate release
         system = platform.system().lower()
         if system == "windows":
-            zip_url = "https://github.com/OBAMANEXT/cyz2json/releases/download/v0.0.5/cyz2json-windows-latest.zip"
+            zip_url = "https://github.com/OBAMANEXT/cyz2json/releases/download/0.0.14/cyz2json-windows-latest.zip"
         elif system == "linux":
-            zip_url = "https://github.com/OBAMANEXT/cyz2json/releases/download/v0.0.5/cyz2json-ubuntu-latest.zip"
+            zip_url = "https://github.com/OBAMANEXT/cyz2json/releases/download/0.0.14/cyz2json-ubuntu-latest.zip"
         else:
             raise RuntimeError(f"Unsupported OS: {system}")
         print(f"Downloading cyz2json for {system}...")

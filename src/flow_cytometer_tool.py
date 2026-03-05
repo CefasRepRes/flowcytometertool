@@ -511,7 +511,7 @@ class UnifiedApp:
         self.path_entry.insert(0, os.path.join(self.cyz2json_dir, "bin", "Cyz2Json.dll"))
         try:
             compile_cyz2json_from_release(self.cyz2json_dir, self.path_entry)
-            messagebox.showinfo("Success", "Cyz2Json installed successfully.")
+            messagebox.showinfo("Success", "Check terminal to verify that Cyz2Json was downloaded successfully.")
         except Exception as e:
             print(f"Installation Error: Failed to install requirements: {e}")
             messagebox.showerror("Installation Error", f"Failed to install requirements:\n{e}")
