@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")  # critical for background threads
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
 
 sns.set_style("whitegrid")
 plt.rcParams["figure.dpi"] = 110
@@ -852,6 +853,211 @@ def append_health_row(start_ts, file_prefix, health, overall_ok, csv_path):
     df.to_csv(csv_path, index=False)
     return df
 
+
+# ---------- JSON sanitization helpers ----------
+
+def _to_json_scalar(x):
+    try:
+        if x is None: return None
+        if isinstance(x, (bool, int, float, str)): return x
+        if isinstance(x, (np.floating,)): return float(x)
+        if isinstance(x, (np.integer,)): return int(x)
+        if isinstance(x, (pd.Timestamp,)): return x.isoformat()
+        if isinstance(x, (float,)) and (np.isnan(x) or np.isinf(x)): return None
+    except Exception:
+        pass
+    # fallback to string
+    try:
+        return None if (isinstance(x, float) and (np.isnan(x) or np.isinf(x))) else str(x)
+    except Exception:
+        return str(x)
+
+
+def _sanitize(obj, _seen=None):
+    if _seen is None: _seen = set()
+    oid = id(obj)
+    if oid in _seen:
+        return "<circular>"
+    _seen.add(oid)
+    if isinstance(obj, dict):
+        return {str(k): _sanitize(v, _seen) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize(v, _seen) for v in obj]
+    return _to_json_scalar(obj)
+
+# ---------- Report packet ----------
+
+def _class_summary_for_file(preds_df):
+    if preds_df is None or "predicted_label" not in preds_df.columns:
+        return {"total": 0, "counts": {}, "proportions": {}}
+    counts = preds_df["predicted_label"].value_counts().to_dict()
+    total = int(sum(counts.values()))
+    props = {k: (v/total if total > 0 else 0.0) for k, v in counts.items()}
+    return {"total": total, "counts": counts, "proportions": props}
+
+
+def _flat_signal_per_channel(preds_df, threshold=0.8):
+    per_ch = {}
+    if preds_df is None: return per_ch
+    channels = {"Yellow": ("Fl_Yellow_average","Fl_Yellow_maximum"), "Orange": ("Fl_Orange_average","Fl_Orange_maximum"), "Red": ("Fl_Red_average","Fl_Red_maximum")}
+    for name, (a,m) in channels.items():
+        if a in preds_df.columns and m in preds_df.columns:
+            df = preds_df[[a,m]].replace([np.inf,-np.inf], np.nan).dropna()
+            if df.empty: continue
+            ratio = pd.to_numeric(df[a], errors="coerce") / pd.to_numeric(df[m], errors="coerce").replace(0,np.nan)
+            ratio = ratio.replace([np.inf,-np.inf], np.nan).dropna()
+            if ratio.empty: continue
+            per_ch[name] = float(np.mean(ratio >= threshold))
+    return per_ch
+
+
+# ---------- JSON helpers: primitive-only (no circular detection needed) ----------
+
+def to_scalar(x):
+    """Return a JSON-safe primitive. NaN/Inf -> None, numpy/pandas scalars converted."""
+    try:
+        if x is None:
+            return None
+        # plain primitives
+        if isinstance(x, (bool, int, float, str)):
+            # JSON can't carry NaN/Inf; map to None
+            if isinstance(x, float) and (np.isnan(x) or np.isinf(x)):
+                return None
+            return x
+        # numpy & pandas scalars
+        if isinstance(x, (np.floating, )):
+            v = float(x)
+            return None if (np.isnan(v) or np.isinf(v)) else v
+        if isinstance(x, (np.integer, )):
+            return int(x)
+        if isinstance(x, pd.Timestamp):
+            return x.isoformat()
+        # sequences -> list of scalars
+        if isinstance(x, (list, tuple)):
+            return [to_scalar(v) for v in x]
+        if isinstance(x, set):
+            return [to_scalar(v) for v in x]
+        # dict -> dict of scalars
+        if isinstance(x, dict):
+            return {str(k): to_scalar(v) for k, v in x.items()}
+    except Exception:
+        # last-resort stringification
+        return str(x)
+    # last resort
+    return str(x)
+
+
+def health_to_plain(health_dict):
+    """
+    Copy health checks into a new dict of pure primitives:
+    { metric: { value:<scalar>, ok:<bool>, rule:<str>, lo:<scalar?>, hi:<scalar?> } }
+    """
+    out = {}
+    for k, d in (health_dict or {}).items():
+        out[k] = {
+            "value": to_scalar(d.get("value")),
+            "ok": bool(d.get("ok")),
+            "rule": str(d.get("rule")),
+        }
+        if "lo" in d or "hi" in d:
+            out[k]["lo"] = to_scalar(d.get("lo"))
+            out[k]["hi"] = to_scalar(d.get("hi"))
+    return out
+
+
+def write_report_packet(file_prefix, row, health, overall_ok, failures,
+                         preds_df, sensor_limits, plot_paths, out_dir):
+    """
+    Build a summary-only packet composed solely of JSON-safe primitives
+    (floats/ints/strings/bools/None), and write to report_packet.json.
+    """
+    # 1) Metrics (copy + scalarize)
+    metrics = {
+        "start": to_scalar(row.get("start")),
+        "triggerLevel": to_scalar(row.get("triggerLevel")),
+        "pumpedVolume": to_scalar(row.get("pumpedVolume")),
+        "analysedVolume": to_scalar(row.get("analysedVolume")),
+        "halfPumpedVolume": to_scalar(row.get("halfPumpedVolume")),
+        "particleCount": to_scalar(row.get("particleCount")),
+        "particleConcentration": to_scalar(row.get("particleConcentration")),
+        "particleRate": to_scalar(row.get("particleRate")),
+        "externalPumpTime": to_scalar(row.get("externalPumpTime")),
+        "duration": to_scalar(row.get("duration")),
+    }
+
+    # 2) Sensors (only ones present; scalarized)
+    sensor_keys = [
+        "absolutePressure", "absPressure", "differentialPressure", "diffPressure",
+        "sheathTemperature", "systemTemperature", "laserTemperature", "PMTtemperature",
+        "sampleCoreSpeed", "particleRateSensor", "laserBeamWidth"
+    ]
+    sensors = {k: to_scalar(row.get(k)) for k in sensor_keys if k in row}
+
+    # 3) Classification summary (counts & proportions) — summary-only
+    def _class_summary_for_file(preds_df):
+        if preds_df is None or "predicted_label" not in preds_df.columns:
+            return {"total": 0, "counts": {}, "proportions": {}}
+        counts = preds_df["predicted_label"].value_counts().to_dict()
+        total = int(sum(counts.values()))
+        props = {k: (v/total if total > 0 else 0.0) for k, v in counts.items()}
+        return {"total": total, "counts": counts, "proportions": props}
+
+    class_summary = _class_summary_for_file(preds_df)
+
+    # 4) Ratios (all scalars)
+    ratios = {
+        "FWSR_over_FWSL_median": to_scalar(_median_ratio(preds_df, "Forward_Scatter_Right_total", "Forward_Scatter_Left_total")),
+        "flat_signal_fraction_max": to_scalar(_flat_signal_fraction(preds_df)),
+        "flat_signal_fraction_per_channel": to_scalar(_flat_signal_per_channel(preds_df)),
+    }
+
+    # 5) Health (flattened) + overall flags
+    health_plain = health_to_plain(health)
+
+    # 6) Thresholds in use (static + applied limits when present)
+    thresholds = {
+        "analysedVolume_min": 2500.0,
+        "particlesPerSec_range": [5.0, 5000.0],
+        "FWSR_over_FWSL_range": [0.75, 1.25],
+        "flat_signal_ratio_threshold": 0.8,
+        "flat_signal_fraction_max": 0.10,
+        "sensor_limits_source": "instrument_if_present_else_fallback",
+    }
+    for key in ["absolutePressure", "differentialPressure", "laserTemperature",
+                "sheathTemperature", "PMTtemperature", "systemTemperature"]:
+        if key in health_plain and ("lo" in health_plain[key] or "hi" in health_plain[key]):
+            thresholds[f"{key}_applied_limits"] = [
+                to_scalar(health_plain[key].get("lo")), to_scalar(health_plain[key].get("hi"))
+            ]
+
+    # 7) Plots (relative paths as strings)
+    plots = to_scalar(plot_paths)
+
+    # 8) Final packet (all primitive types)
+    packet = {
+        "file_id": file_prefix,
+        "metrics": metrics,
+        "sensors": sensors,
+        "class_summary": class_summary,
+        "ratios": ratios,
+        "health": {
+            "overall_ok": bool(overall_ok),
+            "failed_checks": list(failures or []),
+            "checks": health_plain,
+        },
+        "thresholds": thresholds,
+        "plots": plots,
+        "schema_version": 1,
+    }
+
+    # 9) Write JSON
+    out_path = os.path.join(out_dir, "report_packet.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(packet, f, indent=2, ensure_ascii=False)
+    return out_path
+
+
+
 # ---------- Main entry ----------
 
 def update_after_file(instrument_csv, predictions_csv, plots_dir):
@@ -864,61 +1070,63 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
 
     # --- Build rows and append to rolling stores ---
     row = build_measurement_row(inst, preds, instrument_csv_path=instrument_csv)
-
     qc_table_path = os.path.join(plots_dir, "qc_measurements.csv")
     qc_df = append_to_csv_rowwise(row, qc_table_path)
-
     file_prefix = os.path.basename(instrument_csv).replace("_instrument.csv", "")
     class_counts_path = os.path.join(plots_dir, "qc_class_counts.csv")
     class_df = append_class_counts(preds, file_prefix, row["start"], class_counts_path)
-
-    # --- Limits for sensors (from current instrument file, if available) ---
     sensor_limits = _get_limits_from_instrument(inst)
-    
-    # --- Health evaluation ---
-    health, overall_ok, failures = compute_health_flags(inst, preds, row, sensor_limits)
 
-    # Write rolling health CSV
-    health_csv = os.path.join(plots_dir, "qc_health.csv")
+    os.makedirs(plots_dir, exist_ok=True)
+    diag_dir = os.path.join(plots_dir, "diagnostics"); os.makedirs(diag_dir, exist_ok=True)
+
+    volumes_path = os.path.join(plots_dir, "Volumes.png"); plot_volumes(qc_df, volumes_path)
+    particles_path = os.path.join(plots_dir, "particlePlots.png"); plot_particles(qc_df, particles_path)
+
+    class_pie_path = os.path.join(plots_dir, f"{file_prefix}_classProps.png")
+    class_bar_path = os.path.join(plots_dir, f"{file_prefix}_classCounts.png")
+    plot_class_pie_and_bar(preds, file_prefix, plots_dir)
+
+    fws_scatter_path = os.path.join(plots_dir, f"{file_prefix}_FWS_L_vs_R.png"); plot_fws_scatter(preds, file_prefix, plots_dir)
+    percent_max_path = os.path.join(plots_dir, f"{file_prefix}_percentOfMax.png"); plot_percent_of_max_signal(preds, file_prefix, plots_dir)
+
+    class_stack_path = os.path.join(plots_dir, "classComposition_over_time.png"); plot_class_stacked_over_time(class_df, class_stack_path)
+    batch_grid_path = os.path.join(plots_dir, "batch_pies_grid.png"); plot_batch_pies_grid(class_df, batch_grid_path, last_n=12)
+
+    daily_medians_path = os.path.join(plots_dir, "daily_medians.png"); plot_daily_medians(qc_df, daily_medians_path)
+    sensors_panel_path = os.path.join(diag_dir, "sensors_panel.png"); plot_sensors_panel(qc_df, sensor_limits, sensors_panel_path)
+
+    health, overall_ok, failures = compute_health_flags(inst, preds, row, sensor_limits)
+    health_csv = os.path.join(plots_dir, "qc_health.csv"); append_health_row = globals().get('append_health_row')
+    # Re-create append_health_row to avoid forward-ref issue if not defined earlier
+    if append_health_row is None:
+        def append_health_row(start_ts, file_prefix, health, overall_ok, csv_path):
+            flat = {"start": start_ts, "file_id": file_prefix, "overall_ok": bool(overall_ok)}
+            for k, d in health.items():
+                flat[f"{k}_value"] = d.get("value"); flat[f"{k}_ok"] = bool(d.get("ok"))
+            if os.path.exists(csv_path):
+                df = pd.read_csv(csv_path); df = pd.concat([df, pd.DataFrame([flat])], ignore_index=True)
+            else:
+                df = pd.DataFrame([flat])
+            df.to_csv(csv_path, index=False)
+            return df
     append_health_row(row["start"], file_prefix, health, overall_ok, health_csv)
 
-    # Health summary image
-    plot_health_summary(
-        health,
-        overall_ok,
-        failures,
-        file_prefix,
-        os.path.join(plots_dir, "health_summary.png")
-    )
-    
+    health_summary_path = os.path.join(plots_dir, "health_summary.png"); plot_health_summary(health, overall_ok, failures, file_prefix, health_summary_path)
 
-    # --- Ensure subfolders ---
-    os.makedirs(plots_dir, exist_ok=True)
-    diag_dir = os.path.join(plots_dir, "diagnostics")
-    os.makedirs(diag_dir, exist_ok=True)
+    plot_paths = {
+        "Volumes": os.path.relpath(volumes_path, plots_dir),
+        "ParticleMetrics": os.path.relpath(particles_path, plots_dir),
+        "ClassPie": os.path.relpath(class_pie_path, plots_dir),
+        "ClassCounts": os.path.relpath(class_bar_path, plots_dir),
+        "FWS_L_vs_R": os.path.relpath(fws_scatter_path, plots_dir),
+        "PercentOfMax": os.path.relpath(percent_max_path, plots_dir),
+        "ClassCompositionOverTime": os.path.relpath(class_stack_path, plots_dir),
+        "BatchPiesGrid": os.path.relpath(batch_grid_path, plots_dir),
+        "DailyMedians": os.path.relpath(daily_medians_path, plots_dir),
+        "SensorsPanel": os.path.relpath(sensors_panel_path, plots_dir),
+        "HealthSummary": os.path.relpath(health_summary_path, plots_dir),
+    }
 
-    # --- Generate plots (R-parity set) ---
-    # Core time-series
-    plot_volumes(qc_df, os.path.join(plots_dir, "Volumes.png"))
-    plot_particles(qc_df, os.path.join(plots_dir, "particlePlots.png"))
-
-    # Per-file pies and bars
-    plot_class_pie_and_bar(preds, file_prefix, plots_dir)
-    
-    # Per-file PMT saturation indicator (% of max signal per channel)
-    plot_percent_of_max_signal(preds, file_prefix, plots_dir)
-
-    # Per-file FWS-L vs FWS-R scatter (w/ adaptive thinning)
-    plot_fws_scatter(preds, file_prefix, plots_dir)
-    
-    # Class composition over time + batch grid
-    plot_class_stacked_over_time(class_df, os.path.join(plots_dir, "classComposition_over_time.png"))
-    plot_batch_pies_grid(class_df, os.path.join(plots_dir, "batch_pies_grid.png"), last_n=12)
-
-    # Daily medians
-    plot_daily_medians(qc_df, os.path.join(plots_dir, "daily_medians.png"))
-    
-    # Sensors panel with QC bands & outlier dots
-    plot_sensors_panel(qc_df, sensor_limits, os.path.join(diag_dir, "sensors_panel.png"))
-
-    print("[qc] QC plots updated.")
+    packet_path = write_report_packet(file_prefix, row, health, overall_ok, failures, preds, sensor_limits, plot_paths, plots_dir)
+    print(f"[qc] QC plots updated. Report: {packet_path}")
