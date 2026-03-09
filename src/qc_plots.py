@@ -1007,31 +1007,12 @@ def write_report_packet(file_prefix, row, health, overall_ok, failures,
     # 4) Ratios (all scalars)
     ratios = {
         "FWSR_over_FWSL_median": to_scalar(_median_ratio(preds_df, "Forward_Scatter_Right_total", "Forward_Scatter_Left_total")),
-        "flat_signal_fraction_max": to_scalar(_flat_signal_fraction(preds_df)),
         "flat_signal_fraction_per_channel": to_scalar(_flat_signal_per_channel(preds_df)),
     }
 
     # 5) Health (flattened) + overall flags
     health_plain = health_to_plain(health)
 
-    # 6) Thresholds in use (static + applied limits when present)
-    thresholds = {
-        "analysedVolume_min": 2500.0,
-        "particlesPerSec_range": [5.0, 5000.0],
-        "FWSR_over_FWSL_range": [0.75, 1.25],
-        "flat_signal_ratio_threshold": 0.8,
-        "flat_signal_fraction_max": 0.10,
-        "sensor_limits_source": "instrument_if_present_else_fallback",
-    }
-    for key in ["absolutePressure", "differentialPressure", "laserTemperature",
-                "sheathTemperature", "PMTtemperature", "systemTemperature"]:
-        if key in health_plain and ("lo" in health_plain[key] or "hi" in health_plain[key]):
-            thresholds[f"{key}_applied_limits"] = [
-                to_scalar(health_plain[key].get("lo")), to_scalar(health_plain[key].get("hi"))
-            ]
-
-    # 7) Plots (relative paths as strings)
-    plots = to_scalar(plot_paths)
 
     # 8) Final packet (all primitive types)
     packet = {
@@ -1045,9 +1026,6 @@ def write_report_packet(file_prefix, row, health, overall_ok, failures,
             "failed_checks": list(failures or []),
             "checks": health_plain,
         },
-        "thresholds": thresholds,
-        "plots": plots,
-        "schema_version": 1,
     }
 
     # 9) Write JSON
