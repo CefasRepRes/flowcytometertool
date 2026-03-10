@@ -933,7 +933,7 @@ def health_to_plain(health_dict):
 
 # ---------- Flat JSON packet builder (dashboard‑compatible, your classes only) ----------
 
-DASHBOARD_VERSION = "1.0.0"
+DASHBOARD_VERSION = "0.0.3"
 DASHBOARD_SERIAL_NO = "flowcytometer01"
 
 def to_scalar(x):
@@ -989,6 +989,8 @@ def write_report_packet_flat(
     packet["time_start"] = to_scalar(row.get("start"))
     packet["time_end"] = packet["timestamp"]  # or another row‑based timestamp if needed
     packet["survey"] = "not specified"
+    packet["latitude"] = 0 # not implemented
+    packet["longitude"] = 0 # not implemented
 
     # ---------------------------
     # CORE CYTOMETER METRICS (flattened)
