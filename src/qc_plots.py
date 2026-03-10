@@ -913,39 +913,6 @@ def _flat_signal_per_channel(preds_df, threshold=0.8):
 
 # ---------- JSON helpers: primitive-only (no circular detection needed) ----------
 
-def to_scalar(x):
-    """Return a JSON-safe primitive. NaN/Inf -> None, numpy/pandas scalars converted."""
-    try:
-        if x is None:
-            return None
-        # plain primitives
-        if isinstance(x, (bool, int, float, str)):
-            # JSON can't carry NaN/Inf; map to None
-            if isinstance(x, float) and (np.isnan(x) or np.isinf(x)):
-                return None
-            return x
-        # numpy & pandas scalars
-        if isinstance(x, (np.floating, )):
-            v = float(x)
-            return None if (np.isnan(v) or np.isinf(v)) else v
-        if isinstance(x, (np.integer, )):
-            return int(x)
-        if isinstance(x, pd.Timestamp):
-            return x.isoformat()
-        # sequences -> list of scalars
-        if isinstance(x, (list, tuple)):
-            return [to_scalar(v) for v in x]
-        if isinstance(x, set):
-            return [to_scalar(v) for v in x]
-        # dict -> dict of scalars
-        if isinstance(x, dict):
-            return {str(k): to_scalar(v) for k, v in x.items()}
-    except Exception:
-        # last-resort stringification
-        return str(x)
-    # last resort
-    return str(x)
-
 
 def health_to_plain(health_dict):
     """
@@ -964,77 +931,115 @@ def health_to_plain(health_dict):
             out[k]["hi"] = to_scalar(d.get("hi"))
     return out
 
+# ---------- Flat JSON packet builder (dashboard‑compatible, your classes only) ----------
 
-def write_report_packet(file_prefix, row, health, overall_ok, failures,
-                         preds_df, sensor_limits, plot_paths, out_dir):
+DASHBOARD_VERSION = "1.0.0"
+DASHBOARD_SERIAL_NO = "flowcytometer01"
+
+def to_scalar(x):
+    """Return JSON‑safe primitive. NaN/Inf -> None."""
+    try:
+        if x is None:
+            return None
+        if isinstance(x, (bool, int, float, str)):
+            if isinstance(x, float) and (np.isnan(x) or np.isinf(x)):
+                return None
+            return x
+        if isinstance(x, (np.floating,)):
+            v = float(x)
+            return None if (np.isnan(v) or np.isinf(v)) else v
+        if isinstance(x, (np.integer,)):
+            return int(x)
+        if isinstance(x, pd.Timestamp):
+            return x.isoformat()
+        if isinstance(x, (list, tuple)):
+            return [to_scalar(v) for v in x]
+        if isinstance(x, dict):
+            return {str(k): to_scalar(v) for k, v in x.items()}
+    except Exception:
+        return str(x)
+    return str(x)
+
+
+def write_report_packet_flat(
+    file_prefix,
+    row,
+    preds_df,
+    plot_paths,
+    out_dir
+):
     """
-    Build a summary-only packet composed solely of JSON-safe primitives
-    (floats/ints/strings/bools/None), and write to report_packet.json.
+    Produce a FLAT dashboard‑compatible packet using the R‑parity / cytometer metrics.
+    Using *your own class labels* from preds_df["predicted_label"].
+    No optional PI fields. No nested sections. A+B only.
     """
-    # 1) Metrics (copy + scalarize)
-    metrics = {
-        "start": to_scalar(row.get("start")),
-        "triggerLevel": to_scalar(row.get("triggerLevel")),
-        "pumpedVolume": to_scalar(row.get("pumpedVolume")),
-        "analysedVolume": to_scalar(row.get("analysedVolume")),
-        "halfPumpedVolume": to_scalar(row.get("halfPumpedVolume")),
-        "particleCount": to_scalar(row.get("particleCount")),
-        "particleConcentration": to_scalar(row.get("particleConcentration")),
-        "particleRate": to_scalar(row.get("particleRate")),
-        "externalPumpTime": to_scalar(row.get("externalPumpTime")),
-        "duration": to_scalar(row.get("duration")),
-    }
 
-    # 2) Sensors (only ones present; scalarized)
-    sensor_keys = [
-        "absolutePressure", "absPressure", "differentialPressure", "diffPressure",
-        "sheathTemperature", "systemTemperature", "laserTemperature", "PMTtemperature",
-        "sampleCoreSpeed", "particleRateSensor", "laserBeamWidth"
-    ]
-    sensors = {k: to_scalar(row.get(k)) for k in sensor_keys if k in row}
-
-    # 3) Classification summary (counts & proportions) — summary-only
-    def _class_summary_for_file(preds_df):
-        if preds_df is None or "predicted_label" not in preds_df.columns:
-            return {"total": 0, "counts": {}, "proportions": {}}
-        counts = preds_df["predicted_label"].value_counts().to_dict()
-        total = int(sum(counts.values()))
-        props = {k: (v/total if total > 0 else 0.0) for k, v in counts.items()}
-        return {"total": total, "counts": counts, "proportions": props}
-
-    class_summary = _class_summary_for_file(preds_df)
-
-    # 4) Ratios (all scalars)
-    ratios = {
-        "FWSR_over_FWSL_median": to_scalar(_median_ratio(preds_df, "Forward_Scatter_Right_total", "Forward_Scatter_Left_total")),
-        "flat_signal_fraction_per_channel": to_scalar(_flat_signal_per_channel(preds_df)),
-    }
-
-    # 5) Health (flattened) + overall flags
-    health_plain = health_to_plain(health)
-
-
-    # 8) Final packet (all primitive types)
+    # ---------------------------
+    # REQUIRED METADATA (hard‑coded)
+    # ---------------------------
     packet = {
-        "file_id": file_prefix,
-        "metrics": metrics,
-        "sensors": sensors,
-        "class_summary": class_summary,
-        "ratios": ratios,
-        "health": {
-            "overall_ok": bool(overall_ok),
-            "failed_checks": list(failures or []),
-            "checks": health_plain,
-        },
+        "version": DASHBOARD_VERSION,
+        "system_serial_no": DASHBOARD_SERIAL_NO,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
-    # 9) Write JSON
+    # ---------------------------
+    # TIME FIELDS (simple)
+    # ---------------------------
+    packet["time_start"] = to_scalar(row.get("start"))
+    packet["time_end"] = packet["timestamp"]  # or another row‑based timestamp if needed
+    packet["survey"] = "not specified"
+
+    # ---------------------------
+    # CORE CYTOMETER METRICS (flattened)
+    # ---------------------------
+    metric_keys = [
+        "pumpedVolume",
+        "analysedVolume",
+        "particleCount",
+        "particleConcentration",
+        "particleRate",
+        "externalPumpTime",
+        "duration",
+        "triggerLevel",
+    ]
+    for k in metric_keys:
+        packet[k] = to_scalar(row.get(k))
+
+    # ---------------------------
+    # SENSOR VALUES (also flat)
+    # ---------------------------
+    sensor_keys = [
+        "absolutePressure", "absPressure",
+        "differentialPressure", "diffPressure",
+        "sheathTemperature", "systemTemperature",
+        "laserTemperature", "PMTtemperature",
+        "sampleCoreSpeed", "particleRateSensor",
+        "laserBeamWidth",
+    ]
+    for k in sensor_keys:
+        if k in row:
+            packet[k] = to_scalar(row.get(k))
+
+    # ---------------------------
+    # YOUR CLASS LABEL COUNTS
+    # (One <class>_Count entry per class in predictions)
+    # ---------------------------
+    if preds_df is not None and "predicted_label" in preds_df.columns:
+        vals = preds_df["predicted_label"].value_counts().to_dict()
+        for label, count in vals.items():
+            safe_name = f"{label}_Count"
+            packet[safe_name] = int(count)
+
+
+    # ---------------------------
+    # WRITE JSON
+    # ---------------------------
     out_path = os.path.join(out_dir, "report_packet.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(packet, f, indent=2, ensure_ascii=False)
+
     return out_path
-
-
 
 # ---------- Main entry ----------
 
@@ -1106,5 +1111,12 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
         "HealthSummary": os.path.relpath(health_summary_path, plots_dir),
     }
 
-    packet_path = write_report_packet(file_prefix, row, health, overall_ok, failures, preds, sensor_limits, plot_paths, plots_dir)
+    packet_path = write_report_packet_flat(
+        file_prefix=file_prefix,
+        row=row,
+        preds_df=preds,
+        plot_paths=plot_paths,
+        out_dir=plots_dir,
+    )
+
     print(f"[qc] QC plots updated. Report: {packet_path}")
