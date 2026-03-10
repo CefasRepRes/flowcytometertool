@@ -967,77 +967,7 @@ def to_scalar(x):
 # ---------- Main entry ----------
 
 
-# ---------- Final writer & sender ----------
-def write_and_send_flat_packet(file_prefix, row, preds_df, plot_paths, out_dir):
-    packet = build_flat_packet(file_prefix, row, preds_df, plot_paths)
 
-    # Save JSON to disk
-    out_path = os.path.join(out_dir, "report_packet.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(packet, f, indent=2, ensure_ascii=False)
-
-    # Send to dashboard
-    send_to_dashboard(packet)
-
-    return out_path
-
-
-def build_flat_packet(file_prefix, row, preds_df, plot_paths):
-    """
-    Build a flat dashboard-compatible packet using your instrument's metrics.
-    """
-
-    packet = {}
-
-    # Required metadata
-    packet["version"] = "0.0.3"
-    packet["system_serial_no"] = "flowcytometer01"
-    packet["timestamp"] = datetime.utcnow().isoformat() + "Z"
-
-    # Timing (simple)
-    packet["time_start"] = to_scalar(row.get("start"))
-    packet["time_end"] = packet["timestamp"]
-    packet["survey"] = "not specified"
-
-    # Core metrics
-    core_keys = [
-        "pumpedVolume",
-        "analysedVolume",
-        "halfPumpedVolume",
-        "particleCount",
-        "particleConcentration",
-        "particleRate",
-        "externalPumpTime",
-        "duration",
-        "triggerLevel",
-    ]
-    for k in core_keys:
-        packet[k] = to_scalar(row.get(k))
-
-    # Sensors
-    sensor_keys = [
-        "absolutePressure", "absPressure",
-        "differentialPressure", "diffPressure",
-        "sheathTemperature", "systemTemperature",
-        "laserTemperature", "PMTtemperature",
-        "sampleCoreSpeed", "particleRateSensor",
-        "laserBeamWidth",
-    ]
-    for k in sensor_keys:
-        if k in row:
-            packet[k] = to_scalar(row.get(k))
-
-    # Class counts
-    if preds_df is not None and "predicted_label" in preds_df.columns:
-        vc = preds_df["predicted_label"].value_counts().to_dict()
-        for label, count in vc.items():
-            packet[f"{label}_Count"] = int(count)
-
-    # Plot paths (flat, harmless)
-    for k, v in plot_paths.items():
-        packet[k] = v
-
-    return packet
 
 def write_report_packet_flat(
     file_prefix,
@@ -1121,7 +1051,7 @@ def write_report_packet_flat(
     # SEND TO DASHBOARD
     # ---------------------------
     send_to_dashboard(packet)
-
+    print(packet)
     return out_path
     
 def update_after_file(instrument_csv, predictions_csv, plots_dir):
