@@ -31,4 +31,5 @@ dependencies:
       - azure-core
       - azure-storage-blob
       - watchdog
+      - azure-servicebus
 prefix: /home/runner/miniforge3/envs/flowcytometertool_generic
