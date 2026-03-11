@@ -30,36 +30,7 @@ import qc_plots
 
 #import multiprocessing
 
-import pandas as pd
-import numpy as np
-import os
 
-import pandas as pd
-import numpy as np
-import os
-
-import pandas as pd
-import numpy as np
-import os
-
-
-import pandas as pd
-import numpy as np
-import os
-
-
-import pandas as pd
-import numpy as np
-import os
-
-    
-import pandas as pd
-from sklearn.cluster import KMeans
-
-
-import pandas as pd
-import numpy as np
-import json
 from sklearn.cluster import KMeans
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -1053,19 +1024,15 @@ class UnifiedApp:
         sys.stderr = StdoutRedirector(self.log_output)
 
         
-        
-
     def generate_mixfile(self):
         try:
             container = self.url_entry_blob.get().strip()
-            #print(container)
-            sas_token_path = self.sas_token_entry.get().strip()
             sample_rate = float(self.sample_rate_entry.get().strip())
-            sas_token = get_sas_token(sas_token_path)
-            mix_blob_files(container, sas_token, self.output_blob_folder.get().strip(), sample_rate)
+            from functions import mix_blob_files
+            mix_blob_files(container, sas_token=None, output_blob_folder=self.output_blob_folder.get().strip(), sample_rate=sample_rate)
             messagebox.showinfo("Success", "Mixfile generated and uploaded successfully.")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate mixfile: {e}")
+            messagebox.showerror("Error", f"Failed to generate mixfile: {e}")        
 
 
     def _premerge_plot_callback(raw_df):
@@ -1352,11 +1319,6 @@ class UnifiedApp:
         self.tab_blob_tools = ttk.Frame(self.root)
         self.root.nametowidget(".!notebook").add(self.tab_blob_tools, text="Blob Tools")
 
-        # SAS Token Input
-        tk.Label(self.tab_blob_tools, text="SAS Token File Path:").pack(pady=5)
-        self.sas_token_entry = tk.Entry(self.tab_blob_tools, width=100)
-        self.sas_token_entry.insert(0, "C:/Users/JR13/Documents/authenticationkeys/flowcytosaSAS.txt")
-        self.sas_token_entry.pack(pady=5)
 
         # Sample Rate Input
         tk.Label(self.tab_blob_tools, text="Sample Rate (e.g., 0.005):").pack(pady=5)
@@ -1372,7 +1334,7 @@ class UnifiedApp:
         
         tk.Label(self.tab_blob_tools, text="Output Container Name:").pack(pady=5)
         self.output_blob_folder = tk.Entry(self.tab_blob_tools, width=100)
-        self.output_blob_folder.insert(0, "blob_tool_outputs")  # default value
+        self.output_blob_folder.insert(0, "inference")  # default value
         self.output_blob_folder.pack(pady=5)
 
         # Buttons
@@ -1383,9 +1345,6 @@ class UnifiedApp:
 
     def build_process_blob_tab(self):
         tk.Label(self.tab_process_blob, text="SAS Token File Path:").pack(pady=5)
-        self.sas_token_entry = tk.Entry(self.tab_process_blob, width=100)
-        self.sas_token_entry.insert(0, "C:/Users/JR13/Documents/authenticationkeys/flowcytosaSAS.txt")
-        self.sas_token_entry.pack(pady=5)
 
         tk.Label(self.tab_process_blob, text="Blob Container URL:").pack(pady=5)
         self.url_entry_blob = tk.Entry(self.tab_process_blob, width=100)
@@ -1395,11 +1354,21 @@ class UnifiedApp:
         tk.Button(self.tab_process_blob, text="Generate Mixfile", command=self.generate_mixfile).pack(pady=5)
         tk.Button(self.tab_process_blob, text="Process All", command=self.process_all).pack(pady=10)
 
+
+    def download_blob_directory(self):
+        try:
+            blob_url = self.url_entry.get()
+            # Keep public exampledata anonymous behavior inside functions.download_blobs
+            from functions import download_blobs
+            download_blobs(blob_url, self.download_path, sas_token=None)
+            messagebox.showinfo("Success", "Files downloaded successfully.")
+        except Exception as e:
+            messagebox.showerror("Download Error", f"Failed to download files: {e}")
+        
     def download_blob_directory(self):
         try:
             try:
-                sas_token_path = self.sas_token_entry.get().strip()
-                sas_token = get_sas_token(sas_token_path)
+                sas_token = None
             except Exception as e:
                 messagebox.showerror("Token Error", f"Unable to load data access authentication token from the path given in 'blob tools' tab, you can ignore this error if you are using the Cefas public blob folder 'exampledata': {e}")            
                 sas_token = ''
@@ -1546,116 +1515,162 @@ class UnifiedApp:
                 }
                 with open(file_path.replace(".csv", "_metadata.json"), 'w') as f:
                     json.dump(metadata, f)
+            
 
     def process_all(self):
-        container = self.url_entry_blob.get().strip()#
-        output_blob_folder = self.output_blob_folder.get().strip()
-        #print(container)
-        container_url = self.url_entry_blob.get().strip()
-        sas_token_path = self.sas_token_entry.get().strip()
-        sas_token = get_sas_token(sas_token_path)
-        #print(container_url)
-        #print(sas_token)
-        blob_files = list_blobs(container_url, sas_token)
-        processed_files = set()
-        log_file_path = "process_log.txt"
-        if os.path.exists(log_file_path):
-            with open(log_file_path, "r") as log_file:
-                for line in log_file:
-                    processed_url = extract_processed_url(line)
-                    if processed_url:
-                        processed_files.add(processed_url)
-        blob_files = [blob_file for blob_file in blob_files if f"{container_url}/{blob_file}" not in processed_files]
-        for blob_file in blob_files:
-            instrument_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_instrument.csv")
-            predictions_file = os.path.join(self.tool_dir, f"{os.path.basename(blob_file)}_predictions.csv")
-            prediction_counts_path = predictions_file + "_counts.csv"
-            plot3d_prediction_path = predictions_file + "_3d.html"
-            url = f"{container_url}/{blob_file}{sas_token}"
-            url_notoken = f"{container_url}/{blob_file}"
-            for file_path in [plot3d_prediction_path,instrument_file,predictions_file,prediction_counts_path]:
+        """
+        New AAD-based Blob processing pipeline (no SAS tokens).
+        Downloads each .cyz from the container, converts to JSON & listmode,
+        applies the Python model, uploads outputs, updates QC plots, and logs progress.
+        """
+        import os
+        import pandas as pd
+        from tkinter import messagebox
+
+        # Storage helpers (AAD-based)
+        from storage_clients import _split_blob_url, get_blob_client, get_container_client
+
+        # Existing utility functions from your codebase
+        from functions import (
+            upload_to_blob,
+            extract_processed_url,
+            log_message,
+            delete_file,
+            apply_python_model,
+            to_listmode,
+            load_file,
+        )
+        import qc_plots
+
+        try:
+            container_url = self.url_entry_blob.get().strip()  # e.g., https://<acct>.blob.core.windows.net/<container>
+            output_blob_folder = self.output_blob_folder.get().strip()  # destination container name for outputs
+
+            account_url, container_name, _ = _split_blob_url(container_url)
+
+            # Authenticated container client (browser sign-in on first use)
+            cc = get_container_client(account_url, container_name, anonymous=False)
+
+            # Track previously processed blobs (by URL without SAS)
+            processed_files: Set[str] = set()
+            log_file_path = "process_log.txt"
+            if os.path.exists(log_file_path):
+                with open(log_file_path, "r") as log_file:
+                    for line in log_file:
+                        processed_url = extract_processed_url(line)
+                        if processed_url:
+                            processed_files.add(processed_url)
+
+            # Iterate .cyz blobs only
+            for blob in cc.list_blobs():
+                if not blob.name.lower().endswith(".cyz"):
+                    continue
+
+                blob_name = blob.name
+                blob_url_no_token = f"{container_url}/{blob_name}"
+
+                # Skip if already processed
+                if blob_url_no_token in processed_files:
+                    continue
+
+                log_message(f"Starting: {blob_url_no_token}")
+
+                # ---- DOWNLOAD CYZ (no SAS, AAD credential) ----
+                with open(self.cyz_file, "wb") as fh:
+                    get_blob_client(account_url, container_name, blob_name, anonymous=False).download_blob().readinto(fh)
+                log_message(f"Success: Blob downloaded for {blob_url_no_token}")
+
+                # ---- CONVERT: cyz -> json ----
                 try:
-                    delete_file(file_path)
+                    load_file(self.path_entry.get(), self.cyz_file, self.json_file)
+                    log_message(f"Success: Cyz2json applied {blob_url_no_token}")
                 except Exception as e:
-                    log_message(f"No file to delete: {e} (this is fine)")
-            try:
-                #print(url)
-                downloaded_file = download_file(url, self.tool_dir, self.cyz_file)
-                log_message(f"Success: Blob downloaded for {url_notoken}")
-                load_file(self.path_entry.get(), downloaded_file, self.json_file)
-                log_message(f"Success: Cyz2json applied {url_notoken}")
-                to_listmode(self.json_file, self.listmode_file)
-                os.rename(self.listmode_file + "instrument.csv", instrument_file)
-                log_message(f"Success: Listmode applied {url_notoken}")
-                upload_to_blob(instrument_file,  sas_token,container,output_blob_folder)
-                log_message(f"Success: Uploaded {url_notoken}")
-                apply_python_model(self.listmode_file, predictions_file, self.model_path)
-                log_message(f"Success: Blob downloaded and inferences made for {url_notoken}")
-                upload_to_blob(predictions_file,  sas_token, container,output_blob_folder)
-                log_message(f"Success: Uploaded {url_notoken}")
-                predictions_df = pd.read_csv(predictions_file)
-                prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
-                prediction_counts.columns = ['class', 'count']
-                prediction_counts.to_csv(prediction_counts_path, index=False)
-                qc_plots.update_after_file(instrument_file, predictions_file, self.plots_dir)                
-                upload_to_blob(prediction_counts_path,  sas_token,container, output_blob_folder)
-                log_message(f"Success: counted {url_notoken}")
-                data = pd.read_csv(predictions_file)
-                data['category'] = data['predicted_label']
-                unique_categories = data['category'].unique()
-                preset_colors = {
-                    'rednano': 'red',
-                    'orapicoprok': 'orange',
-                    'micro': 'blue',
-                    'beads': 'green',
-                    'oranano': 'purple',
-                    'noise': 'gray',
-                    'C_undetermined': 'black',
-                    'redpico': 'pink'
-                }
-                color_map = {
-                    category: preset_colors.get(
-                        category,
-                        f"rgb({np.random.randint(0, 256)}, {np.random.randint(0, 256)}, {np.random.randint(0, 256)})"
-                    ) for category in unique_categories
-                }
-                data['color'] = data['category'].map(color_map)
-                x_99 = np.percentile(data["FWS_total"], 99.5)
-                y_99 = np.percentile(data["Fl_Red_total"], 99.5)
-                z_99 = np.percentile(data["Fl_Orange_total"], 99.5)
-                scatter = go.Scatter3d(
-                    x=data["FWS_total"],
-                    y=data["Fl_Red_total"],
-                    z=data["Fl_Orange_total"],
-                    mode='markers',
-                    marker=dict(size=5, color=data['color'], showscale=False),
-                    text=data['category'],
-                    name='Data Points'
-                )
-                camera = dict(
-                    eye=dict(x=-1.5, y=-1.5, z=1.5),
-                    center=dict(x=0, y=0, z=0),
-                    up=dict(x=0, y=0, z=1)
-                )
-                fig = go.Figure(data=[scatter])
-                fig.update_layout(
-                    scene=dict(
-                        xaxis=dict(range=[0, x_99], title="FWS_total"),
-                        yaxis=dict(range=[0, y_99], title="Fl_Red_total"),
-                        zaxis=dict(range=[0, z_99], title="Fl_Orange_total"),
-                        camera=camera
-                    ),
-                    title='3D Data Points'
-                )
-                pio.write_html(fig, file=plot3d_prediction_path, auto_open=False)
-                upload_to_blob(plot3d_prediction_path,  sas_token,container,output_blob_folder)
-                log_message("Plot saved as '3D_Plot.html'.")
-                delete_file(plot3d_prediction_path)
-                delete_file(instrument_file)
-                delete_file(predictions_file)
-                delete_file(prediction_counts_path)
-            except Exception as e:
-                log_message(f"Error: An error occurred processing {url_notoken}: {e}")
+                    log_message(f"Error: cyz2json failed for {blob_url_no_token}: {e}")
+                    continue
+
+                # ---- CONVERT: json -> listmode CSV (+ instrument.csv) ----
+                try:
+                    to_listmode(self.json_file, self.listmode_file)
+                    instrument_file = self.listmode_file + "instrument.csv"
+                    log_message(f"Success: Listmode applied {blob_url_no_token}")
+                except Exception as e:
+                    log_message(f"Error: to_listmode failed for {blob_url_no_token}: {e}")
+                    continue
+
+                # ---- APPLY PYTHON MODEL -> predictions CSV ----
+                try:
+                    predictions_file = os.path.join(
+                        self.tool_dir,
+                        f"{os.path.splitext(os.path.basename(self.cyz_file))[0]}_predictions.csv",
+                    )
+                    apply_python_model(self.listmode_file, predictions_file, self.model_path)
+                    log_message(f"Success: Inferences made for {blob_url_no_token}")
+                except Exception as e:
+                    log_message(f"Error: model inference failed for {blob_url_no_token}: {e}")
+                    continue
+
+                # ---- COUNTS CSV ----
+                try:
+                    predictions_df = pd.read_csv(predictions_file)
+                    prediction_counts_path = predictions_file + "_counts.csv"
+                    counts = predictions_df["predicted_label"].value_counts().reset_index()
+                    counts.columns = ["class", "count"]
+                    counts.to_csv(prediction_counts_path, index=False)
+                except Exception as e:
+                    log_message(f"Warning: could not compute class counts for {blob_url_no_token}: {e}")
+                    prediction_counts_path = None
+
+                # ---- QC plots + dashboard packet ----
+                try:
+                    qc_plots.update_after_file(instrument_file, predictions_file, self.plots_dir)
+                except Exception as e:
+                    log_message(f"Warning: QC update failed for {blob_url_no_token}: {e}")
+
+                # ---- OPTIONAL: 3D plot HTML per file (your existing code may generate this) ----
+                plot3d_prediction_path = predictions_file + "_3d.html"
+                if os.path.exists(plot3d_prediction_path):
+                    # leave for upload
+                    pass
+                else:
+                    # If not created earlier, skip silently
+                    plot3d_prediction_path = None
+
+                # ---- UPLOAD OUTPUTS (AAD, no SAS) ----
+                try:
+                    upload_to_blob(instrument_file, None, container_url, output_blob_folder)
+                    upload_to_blob(predictions_file, None, container_url, output_blob_folder)
+                    if prediction_counts_path:
+                        upload_to_blob(prediction_counts_path, None, container_url, output_blob_folder)
+                    if plot3d_prediction_path and os.path.exists(plot3d_prediction_path):
+                        upload_to_blob(plot3d_prediction_path, None, container_url, output_blob_folder)
+                    log_message(f"Success: Uploaded {blob_url_no_token}")
+                except Exception as e:
+                    log_message(f"Error: upload failed for {blob_url_no_token}: {e}")
+
+                # ---- HOUSEKEEPING ----
+                try:
+                    if plot3d_prediction_path and os.path.exists(plot3d_prediction_path):
+                        delete_file(plot3d_prediction_path)
+                    delete_file(instrument_file)
+                    delete_file(predictions_file)
+                    if prediction_counts_path and os.path.exists(prediction_counts_path):
+                        delete_file(prediction_counts_path)
+                except Exception as e:
+                    log_message(f"Warning: cleanup failed for {blob_url_no_token}: {e}")
+
+                # ---- LOG SUCCESS ----
+                log_message(f"Success: counted {blob_url_no_token}")
+
+            # Done
+            messagebox.showinfo("Success", "All files processed and uploaded.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed during processing: {e}")
+            raise
+
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

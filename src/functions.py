@@ -50,7 +50,7 @@ __all__ = ["BlobServiceClient","choose_zone_folders","build_consensual_dataset",
     "Line2D", "PolygonSelector", "Path", "buildSupervisedClassifier", "loadClassifier",
     "subprocess", "zipfile", "extract", "re","test_model","train_classifier","combine_csv_files","convert_json_to_listmode",
     "FileHandler","log_message","Observer","FileSystemEventHandler","filedialog",
-    "sample_rows","upload_to_blob", "get_sas_token","mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier","expertise_matrix_path"]
+    "sample_rows","upload_to_blob", "mix_blob_files","list_blobs","extract_processed_url","apply_python_model","delete_file","combine_csvs","train_model","test_classifier","expertise_matrix_path"]
 
 
 if getattr(sys, 'frozen', False):
@@ -445,50 +445,6 @@ def nn_homogenize_df(
 def sample_rows(df, sample_rate=0.001):
     return df.sample(frac=sample_rate)
 
-def upload_to_blob(file_path, sas_token, container, output_blob_folder):
-    try:
-        full_url = f"{container}{sas_token}"
-        blob_service_client = BlobServiceClient(account_url=full_url)
-        blob_client = blob_service_client.get_blob_client(container=output_blob_folder, blob=os.path.basename(file_path))
-        with open(file_path, "rb") as data:
-            blob_client.upload_blob(data, overwrite=True)
-        log_message(f"Upload Success: File {file_path} uploaded to {container} container.")
-    except Exception as e:
-        log_message(f"Upload Error: Failed to upload file: {e}")
-
-
-def mix_blob_files(container, sas_token, output_blob_folder, sample_rate=0.005):
-    parts = container.split(r"/")
-    container_url = '/'.join(parts[:-1]) + '/'
-    blob_service_client = BlobServiceClient(account_url=f"{container_url}{sas_token}")
-    container_client = blob_service_client.get_container_client(parts[-1])
-    blob_list = container_client.list_blobs()
-    all_sampled_df = pd.DataFrame()
-    file_count = 0
-    print("Mixing csv files, this will take a long time...")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
-        output_file = temp_file.name
-        i=0
-        for blob in blob_list:
-            if blob.name.endswith("_predictions.csv"):
-                i=i+1
-                print(blob.name)
-                try:
-                    blob_client = container_client.get_blob_client(blob)
-                    download_stream = blob_client.download_blob()
-                    df = pd.read_csv(download_stream)
-                    sampled_df = sample_rows(df, sample_rate)
-                    all_sampled_df = pd.concat([all_sampled_df, sampled_df], ignore_index=True)
-                    file_count += 1
-                    if file_count % 100 == 0:
-                        all_sampled_df.to_csv(output_file, index=False)
-                        upload_to_blob(output_file,  sas_token, container, output_blob_folder)
-                except Exception as e:
-                    print(f"Error processing {blob.name}: {e}")
-        if not all_sampled_df.empty:
-            all_sampled_df.to_csv(output_file, index=False)
-            upload_to_blob(output_file,  sas_token, container,output_blob_folder)
-
 
 
 
@@ -618,25 +574,7 @@ def log_message(message, log_file="process_log.txt"):
     with open(log_file, "a") as file:
         file.write(message + "\n")
 
-def get_sas_token(file_path):
-    with open(file_path, 'r') as file:
-        sas_token = file.read().strip()
-    return sas_token
 
-
-def list_blobs(container_url, sas_token):
-    try:    
-        parts = container_url.split(r"/")
-        container_url='/'.join(parts[:-1]) + '/'
-        container = parts[-1]
-        full_url = f"{container_url}{sas_token}"
-        blob_service_client = BlobServiceClient(account_url=full_url)
-        container_client = blob_service_client.get_container_client(container)
-        blob_list = [blob.name for blob in container_client.list_blobs() if blob.name.endswith('.cyz')]
-        return blob_list
-    except Exception as e:
-        log_message(f"Blob Listing Error: Failed to list blobs: {e}")
-        return []
 
 def download_file(url, tool_dir, filename):
     try:
@@ -1188,23 +1126,67 @@ def test_model(df, model_path):
     return df, summary
 
 
+# functions.py (new/updated parts)
+import os
+from urllib.parse import urlparse
+from storage_clients import _split_blob_url, get_container_client, get_blob_client
 
-def download_blobs(blob_url, download_path, sas_token = None):
-    parsed_url = urlparse(blob_url)
-    account_url = f"https://{parsed_url.netloc}"
-    container_name = parsed_url.path.strip("/").split("/")[0]
-    prefix = "/".join(parsed_url.path.strip("/").split("/")[1:])
-    container_client = ContainerClient(account_url=account_url, container_name=container_name, credential=sas_token)
-    blobs = container_client.list_blobs(name_starts_with=prefix)
-    for blob in blobs:
-        print(blob.name)
-        blob_path = blob.name
-        local_file_path = os.path.join(download_path, os.path.relpath(blob_path, prefix))
-        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-        with open(local_file_path, "wb") as file:
-            blob_data = container_client.download_blob(blob_path)
-            file.write(blob_data.readall())
+def download_blobs(blob_url: str, download_path: str, sas_token=None):
+    """
+    New behavior: ignores sas_token; uses Entra ID (InteractiveBrowserCredential).
+    Preserves 'public exampledata' anonymous access.
+    """
+    account_url, container_name, prefix = _split_blob_url(blob_url)
+    anonymous = ("public/exampledata/" in blob_url)  # keep your current public behavior [1](https://cefas-my.sharepoint.com/personal/joseph_ribeiro_cefas_gov_uk/Documents/Microsoft%20Copilot%20Chat%20Files/functions.py)
+    cc = get_container_client(account_url, container_name, anonymous=anonymous)
+    os.makedirs(download_path, exist_ok=True)
+    for blob in cc.list_blobs(name_starts_with=prefix):
+        local_path = os.path.join(download_path, os.path.relpath(blob.name, prefix or "."))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "wb") as fh:
+            cc.download_blob(blob.name).readinto(fh)
 
+def list_blobs(container_url: str, sas_token):
+    """
+    New behavior: ignores sas_token; uses Entra ID.
+    """
+    account_url, container_name, _ = _split_blob_url(container_url)
+    cc = get_container_client(account_url, container_name, anonymous=False)
+    return [b.name for b in cc.list_blobs()]
+
+def upload_to_blob(file_path: str, sas_token, container: str, output_blob_folder: str):
+    """
+    New behavior: ignores sas_token; uses Entra ID.
+    'container' param is the *source container URL* (e.g., https://.../<container>).
+    We upload into 'output_blob_folder' within the same storage account.
+    """
+    account_url, src_container, _ = _split_blob_url(container)
+    # Destination container name is output_blob_folder; blob name is the basename
+    bc = get_blob_client(account_url, output_blob_folder, os.path.basename(file_path), anonymous=False)
+    with open(file_path, "rb") as data:
+        bc.upload_blob(data, overwrite=True)
+
+def mix_blob_files(container: str, sas_token, output_blob_folder: str, sample_rate=0.005):
+    """
+    New behavior: ignores sas_token; uses Entra ID.
+    Same logic as before for reading CSVs and concatenating a sample.
+    """
+    import pandas as pd, tempfile
+    account_url, container_name, _ = _split_blob_url(container)
+    cc = get_container_client(account_url, container_name, anonymous=False)
+
+    all_sampled = pd.DataFrame()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_file:
+        out_csv = temp_file.name
+        for blob in cc.list_blobs():
+            if blob.name.endswith("_predictions.csv"):
+                df = pd.read_csv(cc.get_blob_client(blob.name).download_blob())
+                sampled = df.sample(frac=sample_rate)
+                all_sampled = pd.concat([all_sampled, sampled], ignore_index=True)
+        if not all_sampled.empty:
+            all_sampled.to_csv(out_csv, index=False)
+            # Upload mixed file
+            upload_to_blob(out_csv, sas_token=None, container=container, output_blob_folder=output_blob_folder)
 
 def convert_cyz_to_json(input_dir, output_dir, dll_path):
     import os, subprocess
