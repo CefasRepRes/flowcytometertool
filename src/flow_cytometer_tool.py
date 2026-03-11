@@ -1334,7 +1334,7 @@ class UnifiedApp:
         
         tk.Label(self.tab_blob_tools, text="Output Container Name:").pack(pady=5)
         self.output_blob_folder = tk.Entry(self.tab_blob_tools, width=100)
-        self.output_blob_folder.insert(0, "inference")  # default value
+        self.output_blob_folder.insert(0, "results")  # default value
         self.output_blob_folder.pack(pady=5)
 
         # Buttons
@@ -1628,6 +1628,67 @@ class UnifiedApp:
 
                 # ---- OPTIONAL: 3D plot HTML per file (your existing code may generate this) ----
                 plot3d_prediction_path = predictions_file + "_3d.html"
+                
+                
+                ## Relict 3d plot code not re-implemented, if this is desired in the blob processing we should employ one of the defined 3d plotting functions used by the training tab to do the 3d plot rather than writing it all out again
+                # predictions_df = pd.read_csv(predictions_file)
+                # prediction_counts = predictions_df['predicted_label'].value_counts().reset_index()
+                # prediction_counts.columns = ['class', 'count']
+                # prediction_counts.to_csv(prediction_counts_path, index=False)
+                # qc_plots.update_after_file(instrument_file, predictions_file, self.plots_dir)                
+                # upload_to_blob(prediction_counts_path,  sas_token,container, output_blob_folder)
+                # log_message(f"Success: counted {url_notoken}")
+                # data = pd.read_csv(predictions_file)
+                # data['category'] = data['predicted_label']
+                # unique_categories = data['category'].unique()
+                # preset_colors = {
+                    # 'rednano': 'red',
+                    # 'orapicoprok': 'orange',
+                    # 'micro': 'blue',
+                    # 'beads': 'green',
+                    # 'oranano': 'purple',
+                    # 'noise': 'gray',
+                    # 'C_undetermined': 'black',
+                    # 'redpico': 'pink'
+                # }
+                # color_map = {
+                    # category: preset_colors.get(
+                        # category,
+                        # f"rgb({np.random.randint(0, 256)}, {np.random.randint(0, 256)}, {np.random.randint(0, 256)})"
+                    # ) for category in unique_categories
+                # }
+                # data['color'] = data['category'].map(color_map)
+                # x_99 = np.percentile(data["FWS_total"], 99.5)
+                # y_99 = np.percentile(data["Fl_Red_total"], 99.5)
+                # z_99 = np.percentile(data["Fl_Orange_total"], 99.5)
+                # scatter = go.Scatter3d(
+                    # x=data["FWS_total"],
+                    # y=data["Fl_Red_total"],
+                    # z=data["Fl_Orange_total"],
+                    # mode='markers',
+                    # marker=dict(size=5, color=data['color'], showscale=False),
+                    # text=data['category'],
+                    # name='Data Points'
+                # )
+                # camera = dict(
+                    # eye=dict(x=-1.5, y=-1.5, z=1.5),
+                    # center=dict(x=0, y=0, z=0),
+                    # up=dict(x=0, y=0, z=1)
+                # )
+                # fig = go.Figure(data=[scatter])
+                # fig.update_layout(
+                    # scene=dict(
+                        # xaxis=dict(range=[0, x_99], title="FWS_total"),
+                        # yaxis=dict(range=[0, y_99], title="Fl_Red_total"),
+                        # zaxis=dict(range=[0, z_99], title="Fl_Orange_total"),
+                        # camera=camera
+                    # ),
+                    # title='3D Data Points'
+                # )
+                # pio.write_html(fig, file=plot3d_prediction_path, auto_open=False)
+                # upload_to_blob(plot3d_prediction_path,  sas_token,container,output_blob_folder)                
+                
+                
                 if os.path.exists(plot3d_prediction_path):
                     # leave for upload
                     pass
@@ -1639,11 +1700,15 @@ class UnifiedApp:
                 try:
                     upload_to_blob(instrument_file, None, container_url, output_blob_folder)
                     upload_to_blob(predictions_file, None, container_url, output_blob_folder)
+
                     if prediction_counts_path:
                         upload_to_blob(prediction_counts_path, None, container_url, output_blob_folder)
+
                     if plot3d_prediction_path and os.path.exists(plot3d_prediction_path):
                         upload_to_blob(plot3d_prediction_path, None, container_url, output_blob_folder)
+
                     log_message(f"Success: Uploaded {blob_url_no_token}")
+
                 except Exception as e:
                     log_message(f"Error: upload failed for {blob_url_no_token}: {e}")
 
@@ -1651,13 +1716,16 @@ class UnifiedApp:
                 try:
                     if plot3d_prediction_path and os.path.exists(plot3d_prediction_path):
                         delete_file(plot3d_prediction_path)
+
                     delete_file(instrument_file)
                     delete_file(predictions_file)
+
                     if prediction_counts_path and os.path.exists(prediction_counts_path):
                         delete_file(prediction_counts_path)
+
                 except Exception as e:
                     log_message(f"Warning: cleanup failed for {blob_url_no_token}: {e}")
-
+                    
                 # ---- LOG SUCCESS ----
                 log_message(f"Success: counted {blob_url_no_token}")
 
