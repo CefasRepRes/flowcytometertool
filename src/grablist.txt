@@ -99,6 +99,6 @@ instrument.measurementResults.maximum_measurement_time_s
 instrument.measurementResults.particleCount
 instrument.measurementResults.particlesInFileCount
 instrument.measurementResults.pictureCount
-instrument.measurementResults.pumped_volume
-instrument.measurementResults.analysed_volume
+instrument.measurementResults.pumpedVolume
+instrument.measurementResults.analysedVolume
 instrument.measurementResults.particleConcentration
