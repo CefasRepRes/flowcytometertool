@@ -15,6 +15,8 @@ import seaborn as sns
 import json
 from flowcytosender import send_to_dashboard
 import re
+from reporting import build_packet, write_packet_json, load_grablist, iter_tokens, walk_json, extract_grablist_fields, to_scalar, _PATH_TOKEN_RE
+
 
 DASHBOARD_VERSION = "0.0.3"
 DASHBOARD_SERIAL_NO = "flowcytometer01"
@@ -24,39 +26,7 @@ sns.set_style("whitegrid")
 plt.rcParams["figure.dpi"] = 110
 plt.rcParams["savefig.dpi"] = 110
 
-def _load_grablist(grablist_path: str):
-    paths = []
-    with open(grablist_path, "r", encoding="utf-8-sig") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            paths.append(line)
-    return paths
-
-def extract_grablist_fields(inst_json: dict, grablist_path: str, *, join_wildcards=False):
-    """
-    Returns: dict { short_key: value_or_"NA" }
-    - short_key: the path as written in grablist, but we also offer a 'short' name below if desired
-    """
-    out = {}
-    paths = _load_grablist(grablist_path)
-    for p in paths:
-        # allow a literal key 'filename' in the grablist
-        if p == "filename":
-            v = inst_json.get("filename")
-        else:
-            v = _get_by_path(inst_json, p, join_all=join_wildcards)
-        out[p] = to_scalar(v) if v is not None else "NA"
-    return out
-    
 # --- JSON path helpers (no flattening) ---------------------------------------
-
-_PATH_TOKEN_RE = re.compile(r"""
-    (?P<key>[^.\[\]]+)        # plain object key until '[' or '.'
-    | \[(?P<idx>\d+)\]        # [integer]
-    | \[\*\]                  # [*] wildcard (handled as idx=None, wildcard=True)
-""", re.VERBOSE)
 
 def _iter_path_tokens(path: str):
     """
@@ -1045,32 +1015,6 @@ def health_to_plain(health_dict):
 
 # ---------- Flat JSON packet builder (dashboard‑compatible, your classes only) ----------
 
-
-def to_scalar(x):
-    """Return JSON‑safe primitive. NaN/Inf -> None."""
-    try:
-        if x is None:
-            return None
-        if isinstance(x, (bool, int, float, str)):
-            if isinstance(x, float) and (np.isnan(x) or np.isinf(x)):
-                return None
-            return x
-        if isinstance(x, (np.floating,)):
-            v = float(x)
-            return None if (np.isnan(v) or np.isinf(v)) else v
-        if isinstance(x, (np.integer,)):
-            return int(x)
-        if isinstance(x, pd.Timestamp):
-            return x.isoformat()
-        if isinstance(x, (list, tuple)):
-            return [to_scalar(v) for v in x]
-        if isinstance(x, dict):
-            return {str(k): to_scalar(v) for k, v in x.items()}
-    except Exception:
-        return str(x)
-    return str(x)
-
-
 # ---------- Main entry ----------
 
 
@@ -1189,8 +1133,9 @@ def write_report_packet_flat(
     send_to_dashboard(packet)
     print(packet)
     return out_path
-    
+
 def update_after_file(instrument_csv, predictions_csv, plots_dir):
+    # --- Load inputs ---
     inst = load_instrument_csv(instrument_csv)
     preds = load_predictions_csv(predictions_csv)
 
@@ -1198,57 +1143,110 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
         print("[qc] No instrument.csv loaded; skipping QC plots.")
         return
 
-    # --- Build rows and append to rolling stores ---
+    # --- Build table rows ---
     row = build_measurement_row(inst, preds, instrument_csv_path=instrument_csv)
+
     qc_table_path = os.path.join(plots_dir, "qc_measurements.csv")
     qc_df = append_to_csv_rowwise(row, qc_table_path)
+
     file_prefix = os.path.basename(instrument_csv).replace("_instrument.csv", "")
-    cyz_as_json_file = os.path.join(plots_dir,os.path.basename(instrument_csv).replace(".cyz_instrument.csv", ".json"))
+
+    # cyz-as-json path for the packet writer
+    cyz_as_json_file = os.path.join(
+        plots_dir,
+        os.path.basename(instrument_csv).replace(".cyz_instrument.csv", ".json")
+    )
+
+    # class-counts table
     class_counts_path = os.path.join(plots_dir, "qc_class_counts.csv")
     class_df = append_class_counts(preds, file_prefix, row["start"], class_counts_path)
+
     sensor_limits = _get_limits_from_instrument(inst)
 
+    # --- Ensure output directories ---
     os.makedirs(plots_dir, exist_ok=True)
-    diag_dir = os.path.join(plots_dir, "diagnostics"); os.makedirs(diag_dir, exist_ok=True)
-    volumes_path = os.path.join(plots_dir, "Volumes.png"); plot_volumes(qc_df, volumes_path)
-    particles_path = os.path.join(plots_dir, "particlePlots.png"); plot_particles(qc_df, particles_path)
+    diag_dir = os.path.join(plots_dir, "diagnostics")
+    os.makedirs(diag_dir, exist_ok=True)
+
+    # --- Core plots ---
+    volumes_path = os.path.join(plots_dir, "Volumes.png")
+    plot_volumes(qc_df, volumes_path)
+
+    particles_path = os.path.join(plots_dir, "particlePlots.png")
+    plot_particles(qc_df, particles_path)
+
+    # class pie & bar
     class_pie_path = os.path.join(plots_dir, f"{file_prefix}_classProps.png")
     class_bar_path = os.path.join(plots_dir, f"{file_prefix}_classCounts.png")
-    json_path = instrument_csv.replace("_instrument.csv", ".json")
-    grablist_path = os.path.join(os.path.dirname(__file__), "grablist.txt")
-    
-    row["instrument_json_path"] = json_path
-    row["grablist_path"] = grablist_path    
-    
     plot_class_pie_and_bar(preds, file_prefix, plots_dir)
 
-    fws_scatter_path = os.path.join(plots_dir, f"{file_prefix}_FWS_L_vs_R.png"); plot_fws_scatter(preds, file_prefix, plots_dir)
-    percent_max_path = os.path.join(plots_dir, f"{file_prefix}_percentOfMax.png"); plot_percent_of_max_signal(preds, file_prefix, plots_dir)
+    # FWS scatter
+    fws_scatter_path = os.path.join(plots_dir, f"{file_prefix}_FWS_L_vs_R.png")
+    plot_fws_scatter(preds, file_prefix, plots_dir)
 
-    class_stack_path = os.path.join(plots_dir, "classComposition_over_time.png"); plot_class_stacked_over_time(class_df, class_stack_path)
-    batch_grid_path = os.path.join(plots_dir, "batch_pies_grid.png"); plot_batch_pies_grid(class_df, batch_grid_path, last_n=12)
+    # percent-of-max
+    percent_max_path = os.path.join(plots_dir, f"{file_prefix}_percentOfMax.png")
+    plot_percent_of_max_signal(preds, file_prefix, plots_dir)
 
-    daily_medians_path = os.path.join(plots_dir, "daily_medians.png"); plot_daily_medians(qc_df, daily_medians_path)
-    sensors_panel_path = os.path.join(diag_dir, "sensors_panel.png"); plot_sensors_panel(qc_df, sensor_limits, sensors_panel_path)
+    # class stacked over time
+    class_stack_path = os.path.join(plots_dir, "classComposition_over_time.png")
+    plot_class_stacked_over_time(class_df, class_stack_path)
 
+    # batch pies grid
+    batch_grid_path = os.path.join(plots_dir, "batch_pies_grid.png")
+    plot_batch_pies_grid(class_df, batch_grid_path, last_n=12)
+
+    # daily medians
+    daily_medians_path = os.path.join(plots_dir, "daily_medians.png")
+    plot_daily_medians(qc_df, daily_medians_path)
+
+    # sensor panel
+    sensors_panel_path = os.path.join(diag_dir, "sensors_panel.png")
+    plot_sensors_panel(qc_df, sensor_limits, sensors_panel_path)
+
+    # --- Health flags ---
     health, overall_ok, failures = compute_health_flags(inst, preds, row, sensor_limits)
-    health_csv = os.path.join(plots_dir, "qc_health.csv"); append_health_row = globals().get('append_health_row')
-    # Re-create append_health_row to avoid forward-ref issue if not defined earlier
+
+    health_csv = os.path.join(plots_dir, "qc_health.csv")
+
+    # retrieve append_health_row if available
+    append_health_row = globals().get("append_health_row")
+
+    # fallback implementation
     if append_health_row is None:
-        def append_health_row(start_ts, file_prefix, health, overall_ok, csv_path):
-            flat = {"start": start_ts, "file_id": file_prefix, "overall_ok": bool(overall_ok)}
-            for k, d in health.items():
-                flat[f"{k}_value"] = d.get("value"); flat[f"{k}_ok"] = bool(d.get("ok"))
+        def append_health_row(start_ts, file_prefix, health_dict, overall_ok_flag, csv_path):
+            flat = {
+                "start": start_ts,
+                "file_id": file_prefix,
+                "overall_ok": bool(overall_ok_flag),
+            }
+            for k, d in health_dict.items():
+                flat[f"{k}_value"] = d.get("value")
+                flat[f"{k}_ok"] = bool(d.get("ok"))
+
             if os.path.exists(csv_path):
-                df = pd.read_csv(csv_path); df = pd.concat([df, pd.DataFrame([flat])], ignore_index=True)
+                df = pd.read_csv(csv_path)
+                df = pd.concat([df, pd.DataFrame([flat])], ignore_index=True)
             else:
                 df = pd.DataFrame([flat])
+
             df.to_csv(csv_path, index=False)
             return df
+
     append_health_row(row["start"], file_prefix, health, overall_ok, health_csv)
 
-    health_summary_path = os.path.join(plots_dir, "health_summary.png"); plot_health_summary(health, overall_ok, failures, file_prefix, health_summary_path)
+    # health summary plot
+    health_summary_path = os.path.join(plots_dir, "health_summary.png")
+    plot_health_summary(health, overall_ok, failures, file_prefix, health_summary_path)
 
+    # --- Add JSON paths to row for report packet ---
+    json_path = instrument_csv.replace("_instrument.csv", ".json")
+    grablist_path = os.path.join(os.path.dirname(__file__), "grablist.txt")
+
+    row["instrument_json_path"] = json_path
+    row["grablist_path"] = grablist_path
+
+    # --- Assemble relative paths for the report packet ---
     plot_paths = {
         "Volumes": os.path.relpath(volumes_path, plots_dir),
         "ParticleMetrics": os.path.relpath(particles_path, plots_dir),
@@ -1263,13 +1261,14 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
         "HealthSummary": os.path.relpath(health_summary_path, plots_dir),
     }
 
+    # --- Write final packet ---
     packet_path = write_report_packet_flat(
         file_prefix=file_prefix,
-        cyz_as_json_file= cyz_as_json_file,
+        cyz_as_json_file=cyz_as_json_file,
         row=row,
         preds_df=preds,
         plot_paths=plot_paths,
-        out_dir=plots_dir
+        out_dir=plots_dir,
     )
 
     print(f"[qc] QC plots updated. Report: {packet_path}")
