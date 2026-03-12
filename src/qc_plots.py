@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 from flowcytosender import send_to_dashboard
+import re
 
 DASHBOARD_VERSION = "0.0.3"
 DASHBOARD_SERIAL_NO = "flowcytometer01"
@@ -23,6 +24,112 @@ sns.set_style("whitegrid")
 plt.rcParams["figure.dpi"] = 110
 plt.rcParams["savefig.dpi"] = 110
 
+def _load_grablist(grablist_path: str):
+    paths = []
+    with open(grablist_path, "r", encoding="utf-8-sig") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            paths.append(line)
+    return paths
+
+def extract_grablist_fields(inst_json: dict, grablist_path: str, *, join_wildcards=False):
+    """
+    Returns: dict { short_key: value_or_"NA" }
+    - short_key: the path as written in grablist, but we also offer a 'short' name below if desired
+    """
+    out = {}
+    paths = _load_grablist(grablist_path)
+    for p in paths:
+        # allow a literal key 'filename' in the grablist
+        if p == "filename":
+            v = inst_json.get("filename")
+        else:
+            v = _get_by_path(inst_json, p, join_all=join_wildcards)
+        out[p] = to_scalar(v) if v is not None else "NA"
+    return out
+    
+# --- JSON path helpers (no flattening) ---------------------------------------
+
+_PATH_TOKEN_RE = re.compile(r"""
+    (?P<key>[^.\[\]]+)        # plain object key until '[' or '.'
+    | \[(?P<idx>\d+)\]        # [integer]
+    | \[\*\]                  # [*] wildcard (handled as idx=None, wildcard=True)
+""", re.VERBOSE)
+
+def _iter_path_tokens(path: str):
+    """
+    Yield tokens along a dotted path with optional [idx] / [*] segments.
+      e.g. instrument.A.B[0].C[*].D  -> sequence of dict keys / indices / wildcard marks
+    """
+    # split first on '.' but keep bracketed sections contiguous
+    parts = path.split(".")
+    for part in parts:
+        pos = 0
+        while pos < len(part):
+            m = _PATH_TOKEN_RE.match(part, pos)
+            if not m:
+                raise ValueError(f"Bad path syntax near: '{part[pos:]}' in '{path}'")
+            if m.group("key"):
+                yield ("key", m.group("key"))
+            elif m.group("idx"):
+                yield ("idx", int(m.group("idx")))
+            else:
+                yield ("wild", None)  # [*]
+            pos = m.end()
+
+def _get_by_path(root, path: str, *, join_all=False, sep=";"):
+    """
+    Walk `root` following `path`.
+    - join_all=True: when [*] appears, collect all matches and join with `sep`.
+    - join_all=False: when [*] appears, return the *first* match found (deterministic).
+    Returns the value or None if not found.
+    """
+    def step(node, tokens, depth=0):
+        if not tokens:
+            return [node]  # list of 1 match
+        ttype, tval = tokens[0]
+        rest = tokens[1:]
+
+        if ttype == "key":
+            if isinstance(node, dict) and tval in node:
+                return step(node[tval], rest, depth+1)
+            return []  # missing
+        elif ttype == "idx":
+            if isinstance(node, list) and 0 <= tval < len(node):
+                return step(node[tval], rest, depth+1)
+            return []
+        else:  # wildcard over list
+            if not isinstance(node, list):
+                return []
+            matches = []
+            for i, item in enumerate(node):
+                matches.extend(step(item, rest, depth+1))
+            return matches
+
+    try:
+        tokens = list(_iter_path_tokens(path))
+    except ValueError:
+        return None
+    matches = step(root, tokens)
+
+    if not matches:
+        return None
+    if join_all:
+        # Convert scalars to text for joining; keep JSON-primitives only
+        def as_text(x):
+            if x is None: return ""
+            if isinstance(x, (bool, int, float, str)): return str(x)
+            # if object/array found under wildcard, use JSON mini-dump for clarity
+            try:
+                return json.dumps(x, ensure_ascii=False)
+            except Exception:
+                return str(x)
+        return sep.join(as_text(m) for m in matches)
+    # default: first match, deterministic
+    return matches[0]
+    
 # ---------- IO helpers ----------
 
 def load_instrument_csv(path):
@@ -967,10 +1074,9 @@ def to_scalar(x):
 # ---------- Main entry ----------
 
 
-
-
 def write_report_packet_flat(
     file_prefix,
+    cyz_as_json_file,
     row,
     preds_df,
     plot_paths,
@@ -982,8 +1088,11 @@ def write_report_packet_flat(
     No optional PI fields. No nested sections. A+B only.
     """
 
+    import json, os
+    from datetime import datetime
+
     # ---------------------------
-    # REQUIRED METADATA (hard‑coded)
+    # REQUIRED METADATA
     # ---------------------------
     packet = {
         "version": DASHBOARD_VERSION,
@@ -992,16 +1101,16 @@ def write_report_packet_flat(
     }
 
     # ---------------------------
-    # TIME FIELDS (simple)
+    # TIME FIELDS
     # ---------------------------
     packet["time_start"] = to_scalar(row.get("start"))
-    packet["time_end"] = packet["timestamp"]  
+    packet["time_end"] = packet["timestamp"]
     packet["survey"] = "not specified"
-    packet["latitude"] = 0     # not implemented
-    packet["longitude"] = 0    # not implemented
+    packet["latitude"] = 0
+    packet["longitude"] = 0
 
     # ---------------------------
-    # CORE CYTOMETER METRICS (flattened)
+    # CORE CYTOMETER METRICS
     # ---------------------------
     metric_keys = [
         "pumpedVolume",
@@ -1017,7 +1126,7 @@ def write_report_packet_flat(
         packet[k] = to_scalar(row.get(k))
 
     # ---------------------------
-    # SENSOR VALUES (also flat)
+    # SENSOR VALUES
     # ---------------------------
     sensor_keys = [
         "absolutePressure", "absPressure",
@@ -1039,6 +1148,33 @@ def write_report_packet_flat(
         for label, count in vals.items():
             safe_name = f"{label}_Count"
             packet[safe_name] = int(count)
+
+
+
+    inst_json = None
+
+    if cyz_as_json_file and os.path.exists(cyz_as_json_file):
+        try:
+            with open(cyz_as_json_file, "r", encoding="utf-8-sig") as f:
+                inst_json = json.load(f)
+        except Exception as e:
+            print(f"[grablist] Could not load cyz2json JSON: {e}")
+
+    if inst_json is not None:
+        grablist_path = os.path.join(os.path.dirname(__file__), "grablist.txt")
+
+        try:
+            grabbed = extract_grablist_fields(
+                inst_json,
+                grablist_path,
+                join_wildcards=False
+            )
+            for dotted_key, value in grabbed.items():
+                packet[dotted_key] = "NA" if value is None else value
+        except Exception as e:
+            print(f"[grablist] Extraction failed: {e}")
+
+    # ======================================================================
 
     # ---------------------------
     # WRITE JSON LOCALLY
@@ -1067,18 +1203,23 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
     qc_table_path = os.path.join(plots_dir, "qc_measurements.csv")
     qc_df = append_to_csv_rowwise(row, qc_table_path)
     file_prefix = os.path.basename(instrument_csv).replace("_instrument.csv", "")
+    cyz_as_json_file = os.path.join(plots_dir,os.path.basename(instrument_csv).replace(".cyz_instrument.csv", ".json"))
     class_counts_path = os.path.join(plots_dir, "qc_class_counts.csv")
     class_df = append_class_counts(preds, file_prefix, row["start"], class_counts_path)
     sensor_limits = _get_limits_from_instrument(inst)
 
     os.makedirs(plots_dir, exist_ok=True)
     diag_dir = os.path.join(plots_dir, "diagnostics"); os.makedirs(diag_dir, exist_ok=True)
-
     volumes_path = os.path.join(plots_dir, "Volumes.png"); plot_volumes(qc_df, volumes_path)
     particles_path = os.path.join(plots_dir, "particlePlots.png"); plot_particles(qc_df, particles_path)
-
     class_pie_path = os.path.join(plots_dir, f"{file_prefix}_classProps.png")
     class_bar_path = os.path.join(plots_dir, f"{file_prefix}_classCounts.png")
+    json_path = instrument_csv.replace("_instrument.csv", ".json")
+    grablist_path = os.path.join(os.path.dirname(__file__), "grablist.txt")
+    
+    row["instrument_json_path"] = json_path
+    row["grablist_path"] = grablist_path    
+    
     plot_class_pie_and_bar(preds, file_prefix, plots_dir)
 
     fws_scatter_path = os.path.join(plots_dir, f"{file_prefix}_FWS_L_vs_R.png"); plot_fws_scatter(preds, file_prefix, plots_dir)
@@ -1124,6 +1265,7 @@ def update_after_file(instrument_csv, predictions_csv, plots_dir):
 
     packet_path = write_report_packet_flat(
         file_prefix=file_prefix,
+        cyz_as_json_file= cyz_as_json_file,
         row=row,
         preds_df=preds,
         plot_paths=plot_paths,
