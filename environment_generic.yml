@@ -1,0 +1,37 @@
+name: flowcytometertool_generic
+channels:
+  - conda-forge
+dependencies:
+  - bzip2
+  - ca-certificates
+  - libffi
+  - libsqlite
+  - libzlib
+  - openssl
+  - pip
+  - python
+  - setuptools
+  - tk
+  - tzdata
+  - wheel
+  - xz
+  - opencv
+  - pip:
+      - joblib
+      - requests
+      - Pillow
+      - statistics
+      - scikit-learn
+      - pandas
+      - numpy
+      - matplotlib
+      - seaborn
+      - plotly
+      - ijson
+      - psutil
+      - azure-core
+      - azure-storage-blob
+      - watchdog
+      - azure-servicebus
+      - azure-identity
+prefix: /home/runner/miniforge3/envs/flowcytometertool_generic
