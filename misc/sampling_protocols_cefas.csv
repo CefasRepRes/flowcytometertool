@@ -1,0 +1,5 @@
+﻿protocol,note,what makes it unique,sample repeat interval,pump rate ul/s,max time (mins),trigger level (as a range… units?),Volme expected
+nano,"pico protocol samples alone would not sample ""enough"" of the larger stuff, so this one samples a larger volume with a raised trigger level",trigger level + pump rate,1h,9,5,4 to 5,5ml
+pico,"A low trigger level to quantify the smaller stuff. In my opinion this is the ""better"" sample if it does not omit the small, but due to the low volumes it makes sense to validate the macro and nano group counts with those obtained by the nano sample",trigger level + pump rate,1h,4,10,1.8 to 2.5,0.5-1.5ml
+beads,"taken WITH seawater, so actually a sample of beads and plankton","a box gets ticked for ""Images in flow"" (=IIF in our json?)",24h,9,5,4 to 5,5ml
+images,"not yet implemented, aspects undecided","a box gets ticked for ""beads measurement""",,,,,

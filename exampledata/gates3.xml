@@ -1,0 +1,203 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SetList configuration_date="2025-10-07T16:52:09.5625567+01:00" ExclusiveSets="False" SerialNumber="CS-2022-114">
+  <DefaultSet ListID="0" Name="Default (all)" Color="Gray" Visible="True" />
+  <GateBasedSet ListID="1" Name="Stuff1" Color="Blue" Visible="True">
+    <GateCollection>
+      <RectangleGate X="0.06781262" Y="-0.6338113" Width="30.84647" Height="31.92284">
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="2" Name="New Set" Color="Red" Visible="True">
+    <GateCollection>
+      <RectangleGate X="35.16697" Y="-0.2686808" Width="5681.957" Height="17.4741">
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="3" Name="New Set 2" Color="Green" Visible="True">
+    <GateCollection>
+      <RectangleGate X="0.05470381" Y="8.650936" Width="142.0273" Height="25.50698">
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="4" Name="New Set 3" Color="Orange" Visible="True">
+    <GateCollection>
+      <PolygonGate>
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+        <Path>
+          <Point X="0.1160227" Y="21.4305" />
+          <Point X="133.2144" Y="17.15326" />
+          <Point X="124.9002" Y="8.546614" />
+          <Point X="0.9523873" Y="5.677731" />
+          <Point X="0.2624557" Y="16.99678" />
+          <Point X="0.09160531" Y="20.4916" />
+        </Path>
+      </PolygonGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="5" Name="New Set 4" Color="CornflowerBlue" Visible="True">
+    <GateCollection>
+      <PolygonGate>
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+        <Path>
+          <Point X="294.9409" Y="33.53197" />
+          <Point X="1911.541" Y="17.25758" />
+          <Point X="1509.251" Y="7.39906" />
+          <Point X="45.50787" Y="1.400487" />
+          <Point X="7.817797" Y="0.4094188" />
+          <Point X="5.543904" Y="8.546614" />
+          <Point X="9.901628" Y="11.93711" />
+          <Point X="14.89235" Y="23.62129" />
+          <Point X="14.89235" Y="23.62129" />
+          <Point X="46.49602" Y="30.29796" />
+          <Point X="46.49602" Y="30.29796" />
+          <Point X="94.46751" Y="31.81064" />
+          <Point X="94.46751" Y="31.81064" />
+          <Point X="179.9539" Y="33.01036" />
+          <Point X="179.9539" Y="33.01036" />
+        </Path>
+      </PolygonGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="6" Name="New Set 5" Color="Purple" Visible="True">
+    <GateCollection>
+      <RectangleGate X="1.853624" Y="18.82243" Width="1573.652" Height="19.66489">
+        <XAxis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+        <YAxis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <OrSet ListID="7" Name="(New Set 4 | New Set 5)" Color="0" Visible="True">
+    <AutoSet>true</AutoSet>
+    <SetList>
+      <ListID>5</ListID>
+      <ListID>6</ListID>
+    </SetList>
+  </OrSet>
+  <CombinedSet ListID="8" Name="(New Set 4 | New Set 5) Not New Set 5" Color="Chartreuse" Visible="True">
+    <Set1ListID>7</Set1ListID>
+    <Set2ListID>6</Set2ListID>
+    <CombinationType>set1NOT2</CombinationType>
+  </CombinedSet>
+  <GateBasedSet ListID="9" Name="New Set 6" Color="Yellow" Visible="True">
+    <GateCollection>
+      <RangeGate RangeMin="28.00285" RangeMax="37.49625">
+        <Axis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </Axis>
+      </RangeGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="10" Name="New Set 7" Color="Aqua" Visible="True">
+    <GateCollection>
+      <RangeGate RangeMin="16.11003" RangeMax="24.71668">
+        <Axis Name="Total  Fl Red / Total  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Total  Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Total" />
+          <AxisDenominator Name="Total  FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Total" />
+        </Axis>
+      </RangeGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="11" Name="New Set 8" Color="Aquamarine" Visible="True">
+    <GateCollection>
+      <RangeGate RangeMin="1.372182" RangeMax="1.737936">
+        <Axis Name="Average [mV] Sidewards Scatter" IsLog="True" Type="SingleAxis" ChannelType="SWS" ChannelName="Sidewards Scatter" Parameter="Average" />
+      </RangeGate>
+      <RectangleGate X="-71.59029" Y="15.94966" Width="195.69" Height="6.843371">
+        <XAxis Name="Length [µm] FWS / Number of cells  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  FWS" IsLog="False" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="NumberOfCells" />
+        </XAxis>
+        <YAxis Name="Length [µm] Fl Red / Number of cells  Fl Red" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  Fl Red" IsLog="False" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="NumberOfCells" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="12" Name="New Set 9" Color="BlueViolet" Visible="True">
+    <GateCollection>
+      <PolygonGate>
+        <XAxis Name="Length [µm] FWS / Number of cells  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  FWS" IsLog="False" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="NumberOfCells" />
+        </XAxis>
+        <YAxis Name="Length [µm] Fl Red / Number of cells  Fl Red" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  Fl Red" IsLog="False" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="NumberOfCells" />
+        </YAxis>
+        <Path>
+          <Point X="33.08111" Y="15.172" />
+          <Point X="-64.00541" Y="-1.003235" />
+          <Point X="58.86972" Y="1.01867" />
+          <Point X="102.8621" Y="7.084385" />
+        </Path>
+      </PolygonGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="13" Name="New Set 10" Color="Brown" Visible="True">
+    <GateCollection>
+      <RectangleGate X="222.7032" Y="33.83574" Width="160.7995" Height="27.06242">
+        <XAxis Name="Length [µm] FWS / Number of cells  FWS" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] FWS" IsLog="True" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  FWS" IsLog="False" Type="SingleAxis" ChannelType="FWS" ChannelName="FWS" Parameter="NumberOfCells" />
+        </XAxis>
+        <YAxis Name="Length [µm] Fl Red / Number of cells  Fl Red" IsLog="False" Type="RatioAxis">
+          <AxisNumerator Name="Length [µm] Fl Red" IsLog="True" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="Length" />
+          <AxisDenominator Name="Number of cells  Fl Red" IsLog="False" Type="SingleAxis" ChannelType="FLRed" ChannelName="Fl Red" Parameter="NumberOfCells" />
+        </YAxis>
+      </RectangleGate>
+    </GateCollection>
+  </GateBasedSet>
+  <GateBasedSet ListID="14" Name="New Set 11" Color="BurlyWood" Visible="True">
+    <GateCollection />
+  </GateBasedSet>
+  <GateBasedSet ListID="15" Name="New Set 12" Color="Chocolate" Visible="True">
+    <GateCollection />
+  </GateBasedSet>
+  <OrSet ListID="16" Name="(New Set 11 | New Set 12)" Color="Coral" Visible="True">
+    <AutoSet>false</AutoSet>
+    <SetList>
+      <ListID>14</ListID>
+      <ListID>15</ListID>
+    </SetList>
+  </OrSet>
+  <OrSet ListID="17" Name="(New Set 12 | (New Set 11 | New Set 12))" Color="0" Visible="True">
+    <AutoSet>true</AutoSet>
+    <SetList>
+      <ListID>16</ListID>
+      <ListID>15</ListID>
+    </SetList>
+  </OrSet>
+  <CombinedSet ListID="18" Name="(New Set 12 | (New Set 11 | New Set 12)) And New Set 9" Color="Crimson" Visible="True">
+    <Set1ListID>17</Set1ListID>
+    <Set2ListID>12</Set2ListID>
+    <CombinationType>set1AND2</CombinationType>
+  </CombinedSet>
+</SetList>
